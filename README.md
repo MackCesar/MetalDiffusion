@@ -1,3 +1,5 @@
+# STILL UNDER CONSTRUCTION
+
 # Stable Diffusion in TensorFlow / Keras
 
 A Keras / Tensorflow implementation of Stable Diffusion designed for Apple Metal on Intel Macs.
