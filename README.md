@@ -34,12 +34,20 @@ brew install pyenv
 pyenv install 3.9.0
 ```
 
-### Installing using the repo
+### Set the global Python
+
+Set the global python that the Mac will use to the newly install, via penv, python.
+
+```bash
+pyenv global 3.9.0
+```
+
+### Install the github repo
 
 Navigate to a folder/directory you want to create your virtual environment in. For example: `/Users/MacUser`
 
 Download the repo, either by downloading the
-[zip](https://github.com/divamgupta/stable-diffusion-tensorflow/archive/refs/heads/master.zip)
+[zip](https://github.com/soten355/stable-diffusion-tensorflow-IntelMetal/archive/refs/heads/master.zip)
 file or by cloning the repo with git:
 
 ```bash
@@ -65,7 +73,7 @@ brew install git
     source venv/bin/activate
     ```
 
-3) Install dependencies using the `requirements.txt` file or the `requirements_m1.txt` file,:
+3) Install dependencies using the `requirements.txt` file:
 
     ```bash
     pip install -r requirements.txt
