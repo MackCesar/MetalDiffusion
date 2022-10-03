@@ -20,6 +20,20 @@ Homebrew is a foundational tool for Mac and is required for this process.
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
+### Install pyenv
+
+`pyenv` allows you to install Python independently from the Mac's base installation.
+
+```bash
+brew install pyenv
+```
+
+### Install Python via pyenv
+
+```bash
+pyenv install 3.9.0
+```
+
 ### Installing using the repo
 
 Navigate to a folder you want to create your virtual environment in.
