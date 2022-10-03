@@ -1,37 +1,18 @@
 # Stable Diffusion in TensorFlow / Keras
 
-A Keras / Tensorflow implementation of Stable Diffusion. 
+A Keras / Tensorflow implementation of Stable Diffusion designed for Apple Metal on Intel Macs.
 
 The weights were ported from the original implementation.
-
-## Colab Notebooks
-
-The easiest way to try it out is to use one of the Colab notebooks:
-
-
-- [GPU Colab](https://colab.research.google.com/drive/1zVTa4mLeM_w44WaFwl7utTaa6JcaH1zK)
-- [GPU Colab Img2Img](https://colab.research.google.com/drive/1gol0M611zXP6Zpggfri-fG8JDdpMEpsI?usp=sharing)
-- [GPU Colab + Mixed Precision](https://colab.research.google.com/drive/15mQgITh3e9HQMNys0zR8JN4R2vp06d-N)
-  - ~10s generation time per image (512x512) on default Colab GPU without drop in quality
-    ([source](https://twitter.com/fchollet/status/1571954014845308928))
-- [TPU Colab](https://colab.research.google.com/drive/17zQOm_2Iu6pcP8otT-v6rx0D-pKgfaLm).
-  - Slower than GPU for single-image generation, faster for large batch of 8+ images
-    ([source](https://twitter.com/fchollet/status/1572004717362028546)).
-- [GPU Colab with Gradio](https://colab.research.google.com/drive/1ANTUur1MF9DKNd5-BTWhbWa7xUBfCWyI)
 
 
 
 ## Installation
 
-### Install as a python package
-
-Install using pip with the git repo:
-
-```bash
-pip install git+https://github.com/divamgupta/stable-diffusion-tensorflow
-```
+This program is best utilized as a virtual environment in python.
 
 ### Installing using the repo
+
+Navigate to a folder you want to create your virtual environment in.
 
 Download the repo, either by downloading the
 [zip](https://github.com/divamgupta/stable-diffusion-tensorflow/archive/refs/heads/master.zip)
@@ -41,15 +22,7 @@ file or by cloning the repo with git:
 git clone git@github.com:divamgupta/stable-diffusion-tensorflow.git
 ```
 
-#### Using pip without a virtual environment
-
-Install dependencies using the `requirements.txt` file or the `requirements_m1.txt` file,:
-
-```bash
-pip install -r requirements.txt
-```
-
-#### Using a virtual environment with *virtualenv*
+#### Create a virtual environment with *virtualenv*
 
 1) Create your virtual environment for `python3`:
 
@@ -147,3 +120,4 @@ The following outputs have been generated using this implementation:
 
 1) https://github.com/CompVis/stable-diffusion
 2) https://github.com/geohot/tinygrad/blob/master/examples/stable_diffusion.py
+3) https://github.com/divamgupta/stable-diffusion-tensorflow
