@@ -10,7 +10,15 @@ The weights were ported from the original implementation.
 
 ## Installation
 
-This program is best utilized as a virtual environment in python.
+This program is best utilized with python independent from a Mac's base installation and python's virtual environment.
+
+### Install Homebrew if not already
+
+Homebrew is a foundational tool for Mac and is required for this process.
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
 ### Installing using the repo
 
