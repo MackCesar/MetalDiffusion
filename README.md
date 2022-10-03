@@ -43,7 +43,7 @@ Download the repo, either by downloading the
 file or by cloning the repo with git:
 
 ```bash
-git clone git@github.com:divamgupta/stable-diffusion-tensorflow.git
+git clone https://github.com/soten355/stable-diffusion-tensorflow-IntelMetal.git
 ```
 
 If you don't have git installed, use `homebrew`:
