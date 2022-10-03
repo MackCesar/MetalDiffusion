@@ -14,7 +14,7 @@ This program is best utilized with python independent from a Mac's base installa
 
 ### Install Homebrew if not already
 
-Homebrew is a foundational tool for Mac and is required for this process.
+`Homebrew` is a foundational tool for Mac and is required for this process.
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -36,7 +36,7 @@ pyenv install 3.9.0
 
 ### Installing using the repo
 
-Navigate to a folder you want to create your virtual environment in.
+Navigate to a folder/directory you want to create your virtual environment in. For example: `/Users/MacUser`
 
 Download the repo, either by downloading the
 [zip](https://github.com/divamgupta/stable-diffusion-tensorflow/archive/refs/heads/master.zip)
@@ -44,6 +44,11 @@ file or by cloning the repo with git:
 
 ```bash
 git clone git@github.com:divamgupta/stable-diffusion-tensorflow.git
+```
+
+If you don't have git installed, use `homebrew`:
+```bash
+brew install git
 ```
 
 #### Create a virtual environment with *virtualenv*
