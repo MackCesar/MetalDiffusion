@@ -4,7 +4,7 @@
 
 A Keras / Tensorflow implementation of Stable Diffusion designed for Apple Metal on Intel Macs.
 
-The weights were ported from the original implementation.
+The weights were ported from the original implementation of Stable Diffusion.
 
 
 
@@ -40,6 +40,12 @@ Set the global python that the Mac will use to the newly install, via penv, pyth
 
 ```bash
 pyenv global 3.9.0
+```
+
+and check to make sure the global python has been set to python in pyenv:
+
+```bash
+pyenv versions
 ```
 
 ### Install the github repo
