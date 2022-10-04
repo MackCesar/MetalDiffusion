@@ -20,13 +20,15 @@ This program is best utilized with python independent from a Mac's base installa
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-### Install pyenv
+### Install/Update pyenv
 
 `pyenv` allows you to install Python independently from the Mac's base installation.
 
 ```bash
 brew install pyenv
 ```
+
+If pyenv is already installed, then Homebrew will update pyenv
 
 ### Install Python via pyenv
 
@@ -47,8 +49,17 @@ and check to make sure the global python has been set to python in pyenv:
 ```bash
 pyenv versions
 ```
+### Install/Update git
 
-### Install the github repo
+`git` allows you to download this repository (repo)
+
+```bash
+brew install git
+```
+
+If git is already installed, then Homebrew will update git
+
+### Download the github repo
 
 Navigate to a folder/directory you want to create your virtual environment in. For example: `/Users/MacUser`
 
@@ -60,10 +71,6 @@ file or by cloning the repo with git:
 git clone https://github.com/soten355/stable-diffusion-tensorflow-IntelMetal.git
 ```
 
-If you don't have git installed, use `homebrew`:
-```bash
-brew install git
-```
 ### Start working in the virutal environment
 
 First, navigate to the root folder in the github repo that was just installed. For example: `/Users/MacUser/stable-diffusion-tensorflow-IntelMetal/`
