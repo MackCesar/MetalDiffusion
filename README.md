@@ -118,7 +118,7 @@ generator = StableDiffusion(
     jit_compile=False,
 )
 
-### Use the generate function in the class to create an image. It will return an array value which is an image
+### Use the generate function in the class to create an image. It will return an array which can be converted into an iamge
 img = generator.generate(
     "An astronaut riding a horse",
     num_steps=50,
@@ -127,7 +127,7 @@ img = generator.generate(
     batch_size=1,
 )
 
-# Or also include an image for image to image :
+# Or also include an image for image to image
 img = generator.generate(
     "A Halloween bedroom",
     num_steps=50,
