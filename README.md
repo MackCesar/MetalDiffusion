@@ -44,11 +44,8 @@ Set the global python that the Mac will use to the newly install, via penv, pyth
 pyenv global 3.9.0
 ```
 
-and check to make sure the global python has been set to python in pyenv:
+This step will override which version and location of python the Mac will use, allowing for easier updating and control.
 
-```bash
-pyenv versions
-```
 ### Install/Update git
 
 `git` allows you to download this repository (repo)
@@ -95,21 +92,33 @@ First, navigate to the root folder in the github repo that was just installed. F
     pip install -r requirements.txt
     ```
 
+4) When finished using Stable Diffusion, deactivate the virtual environment:
+    
+    ```bash
+    deactivate
+    ```
+
 ## Usage
 
-### Using the Python interface
+### Custom Script
 
-If you installed the package, you can use it as follows:
+You can use the repo as a python module:
 
 ```python
+### Import Stable Diffusion Tensorflow
 from stable_diffusion_tf.stable_diffusion import StableDiffusion
+
+### Import image creation module
 from PIL import Image
 
+### Create a class
 generator = StableDiffusion(
     img_height=512,
     img_width=512,
     jit_compile=False,
 )
+
+### Use the generate function in the class to create an image. It will return an array value which is an image
 img = generator.generate(
     "An astronaut riding a horse",
     num_steps=50,
@@ -118,7 +127,7 @@ img = generator.generate(
     batch_size=1,
 )
 
-# for image to image :
+# Or also include an image for image to image :
 img = generator.generate(
     "A Halloween bedroom",
     num_steps=50,
@@ -128,14 +137,13 @@ img = generator.generate(
     input_image="/path/to/img.png"
 )
 
-
+### Convert the returned array to an actual image and save it
 Image.fromarray(img[0]).save("output.png")
 ```
 
 ### Using `text2image.py` from the git repo
 
-Assuming you have installed the required packages, 
-you can generate images from a text prompt using:
+*text2image.py* is a pre-created python script that can be used from the command line within the virtual environment:
 
 ```bash
 python text2image.py --prompt="An astronaut riding a horse"
