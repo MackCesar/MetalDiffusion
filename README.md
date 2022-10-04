@@ -100,9 +100,9 @@ First, navigate to the root folder in the github repo that was just installed. F
 
 ## Usage
 
-### Custom Script
+### As a Python module
 
-You can use the repo as a python module:
+You can use the repo as a python module in a custom script:
 
 ```python
 ### Import Stable Diffusion Tensorflow
