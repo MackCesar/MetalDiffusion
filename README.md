@@ -10,11 +10,11 @@ The weights were ported from the original implementation of Stable Diffusion.
 
 ## Installation
 
-This program is best utilized with python independent from a Mac's base installation and python's virtual environment.
+This program is best utilized with python independent from a Mac's base installation and python's virtual environment. These installation instructions are geared towards use on an Intel Mac.
 
-### Install Homebrew if not already
+### Install Homebrew, if not already installed
 
-`Homebrew` is a foundational tool for Mac and is required for this process.
+`Homebrew` is a fundamental tool for Mac and is required for this installion process.
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
