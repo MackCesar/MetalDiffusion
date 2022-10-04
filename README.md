@@ -80,7 +80,7 @@ First, navigate to the root folder in the github repo that was just installed. F
     python3 -m venv venv
     ```
    
-2) Activate your virtualenv:
+2) Activate your virtual environment:
 
     ```bash
     source venv/bin/activate
