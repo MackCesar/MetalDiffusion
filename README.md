@@ -80,7 +80,11 @@ git clone https://github.com/soten355/stable-diffusion-tensorflow-IntelMetal.git
 
 ### Start working in the virutal environment
 
-First, navigate to the root folder in the github repo that was just installed. For example: `/Users/MacUser/stable-diffusion-tensorflow-IntelMetal/`
+First, navigate to the root folder in the github repo that was just installed. For example:
+
+```bash
+cd /Users/MacUser/stable-diffusion-tensorflow-IntelMetal/
+```
 
 #### Create a virtual environment with *virtualenv*
 
