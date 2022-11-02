@@ -12,6 +12,16 @@ The weights were ported from the original implementation of Stable Diffusion.
 
 This program is best utilized within a python virtual environment, making it independent of the python already installed on MacOS. These installation instructions are geared towards use on an Intel Mac, but also apply to Apple Silicon Macs.
 
+### Programs required
+
+1) Terminal
+2) Homebrew
+3) Pyenv
+4) Python
+5) Git
+
+`Terminal` will be used for all of the following commands:
+
 ### Install Homebrew, if not already installed
 
 `Homebrew` is a fundamental tool for Mac and is required for this installion process.
