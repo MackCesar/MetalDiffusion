@@ -10,7 +10,7 @@ The weights were ported from the original implementation of Stable Diffusion.
 
 ## Installation
 
-This program is best utilized with python independent from a Mac's base installation and python's virtual environment. These installation instructions are geared towards use on an Intel Mac.
+This program is best utilized within a python virtual environment, making it independent of the python already installed on MacOS. These installation instructions are geared towards use on an Intel Mac, but also apply to Apple Silicon Macs.
 
 ### Install Homebrew, if not already installed
 
