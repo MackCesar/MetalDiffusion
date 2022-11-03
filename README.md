@@ -86,7 +86,7 @@ cd /Users/MacUser/stable-diffusion-tensorflow-IntelMetal/
 
 #### Create a virtual environment with *virtualenv*
 
-1) Create your virtual environment for `python3`:
+1) Create your virtual environment for `python`:
 
     ```bash
     python -m venv venv
@@ -153,7 +153,7 @@ img = generator.generate(
 Image.fromarray(img[0]).save("output.png")
 ```
 
-### Using `text2image.py` in `terminal`
+### Using `text2image.py` in `Terminal`
 
 *text2image.py* is a pre-created python script that can be used from the command line within the virtual environment:
 
