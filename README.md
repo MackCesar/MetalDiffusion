@@ -46,13 +46,13 @@ pyenv install 3.9.0
 
 ### Set the global Python
 
-Set the global python that the Mac will use to the newly install, via penv, python.
+Set the global python that the Mac will use to the newly installed, via pyenv, python.
 
 ```bash
 pyenv global 3.9.0
 ```
 
-This step will override which version and location of python the Mac will use, allowing for easier updating and control.
+This step will override which version and the location of python the Mac will use, allowing for easier updating and control.
 
 ### Install/Update git
 
