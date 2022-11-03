@@ -89,7 +89,7 @@ cd /Users/MacUser/stable-diffusion-tensorflow-IntelMetal/
 1) Create your virtual environment for `python3`:
 
     ```bash
-    python3 -m venv venv
+    python -m venv venv
     ```
    
 2) Activate your virtual environment:
