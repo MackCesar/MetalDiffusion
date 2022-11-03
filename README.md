@@ -1,6 +1,6 @@
 # Stable Diffusion in TensorFlow / Keras for Apple Metal on Intel Macs
 
-A Keras / Tensorflow implementation of Stable Diffusion, intended for Apple Metal on Intel Macs. This implementation will utilize GPU's on Intel Macs but will also run on Apple Silicon Macs.
+A Keras / Tensorflow implementation of Stable Diffusion, intended for Apple Metal on Intel Macs. This implementation will utilize GPU's on Intel Macs.
 
 The weights were ported from the original implementation of Stable Diffusion.
 
@@ -8,7 +8,7 @@ The weights were ported from the original implementation of Stable Diffusion.
 
 ## Installation
 
-This program is best utilized within a python virtual environment, making it independent of the python already installed on MacOS. These installation instructions are geared towards use on an Intel Mac, but also apply to Apple Silicon Macs.
+This program is best utilized within a python virtual environment, making it independent of the python already installed on MacOS. These installation instructions are geared towards use on an Intel Mac.
 
 ### Programs required
 
