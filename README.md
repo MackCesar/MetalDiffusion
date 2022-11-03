@@ -153,7 +153,7 @@ img = generator.generate(
 Image.fromarray(img[0]).save("output.png")
 ```
 
-### Using `text2image.py` from the git repo
+### Using `text2image.py` in `terminal`
 
 *text2image.py* is a pre-created python script that can be used from the command line within the virtual environment:
 
