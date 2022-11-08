@@ -1,36 +1,73 @@
-import numpy as np
-from tqdm import tqdm
-import math
+### System modules
+from tqdm import tqdm #progress bar module
+import sys
+import os
+import warnings
+import logging
 
+### Math modules
+import numpy as np
+import math
+import random
+
+### Import tensorflow, but with supressed warnings
+# Filter tensorflow version warnings
+# https://stackoverflow.com/questions/40426502/is-there-a-way-to-suppress-the-messages-tensorflow-prints/40426709
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
+# https://stackoverflow.com/questions/15777951/how-to-suppress-pandas-future-warning
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=Warning)
 import tensorflow as tf
+tf.get_logger().setLevel('INFO')
+tf.autograph.set_verbosity(0)
+tf.get_logger().setLevel(logging.ERROR)
+
+### Keras module
 from tensorflow import keras
 
+### Modules for Machine Learning
 from .autoencoder_kl import Decoder, Encoder
 from .diffusion_model import UNetModel
 from .clip_encoder import CLIPTextTransformer
 from .clip_tokenizer import SimpleTokenizer
-from .constants import _UNCONDITIONAL_TOKENS, _ALPHAS_CUMPROD
+from .constants import _UNCONDITIONAL_TOKENS, _ALPHAS_CUMPROD, PYTORCH_CKPT_MAPPING
+
+### Modules for image building
 from PIL import Image
 
+### Global Variables
 MAX_TEXT_LEN = 77
 
+### Main Class
 
 class StableDiffusion:
     def __init__(self, img_height=1000, img_width=1000, jit_compile=False, download_weights=True):
+        # Necessary variables
         self.img_height = img_height
         self.img_width = img_width
         self.tokenizer = SimpleTokenizer()
 
+        # weight and models
         text_encoder, diffusion_model, decoder, encoder = get_models(img_height, img_width, download_weights=download_weights)
         self.text_encoder = text_encoder
         self.diffusion_model = diffusion_model
         self.decoder = decoder
         self.encoder = encoder
+
+        # jit compile
         if jit_compile:
             self.text_encoder.compile(jit_compile=True)
             self.diffusion_model.compile(jit_compile=True)
             self.decoder.compile(jit_compile=True)
+        
+        # Global policy
+        self.dtype = tf.float32 # Default
 
+        # Maaaybe float16 will result in faster images?
+        if tf.keras.mixed_precision.global_policy().name == 'mixed_float16':
+            self.dtype = tf.float16
+
+    # Generate an image
     def generate(
         self,
         prompt,
@@ -41,35 +78,72 @@ class StableDiffusion:
         seed=None,
         input_image=None,
         input_image_strength=0.5,
+        negativePrompt=None
     ):
         # Tokenize prompt (i.e. starting context)
+        print("\n...tokenizing prompt...")
         inputs = self.tokenizer.encode(prompt)
-        assert len(inputs) < 77, "Prompt is too long (should be < 77 tokens)"
+        # assert len(inputs) < 77, "Prompt is too long (should be < 77 tokens)"
+        if len(inputs) > 77:
+            print("Prompt is too long (should be < 77 tokens). Truncating down to 77 tokens")
+            inputs = inputs[0:76]
         phrase = inputs + [49407] * (77 - len(inputs))
         phrase = np.array(phrase)[None].astype("int32")
         phrase = np.repeat(phrase, batch_size, axis=0)
 
         # Encode prompt tokens (and their positions) into a "context vector"
+        print("...encoding the tokenized prompt...")
         pos_ids = np.array(list(range(77)))[None].astype("int32")
         pos_ids = np.repeat(pos_ids, batch_size, axis=0)
         context = self.text_encoder.predict_on_batch([phrase, pos_ids])
 
+        # Prepare the input image, if it was given
         if type(input_image) is str:
+            print("...preparing input image...")
             input_image = Image.open(input_image)
             input_image = input_image.resize((self.img_width, self.img_height))
             input_image = np.array(input_image)[... , :3]
             input_image = (input_image.astype("float") / 255.0)*2 - 1 
 
+        # Create a random seed if one is not provided
+        if seed is None:
+            print("...generating random seed...")
+            seed = random.randint(1000, sys.maxsize)
 
-        # Encode unconditional tokens (and their positions into an
-        # "unconditional context vector"
-        unconditional_tokens = np.array(_UNCONDITIONAL_TOKENS)[None].astype("int32")
-        unconditional_tokens = np.repeat(unconditional_tokens, batch_size, axis=0)
-        self.unconditional_tokens = tf.convert_to_tensor(unconditional_tokens)
-        unconditional_context = self.text_encoder.predict_on_batch(
-            [self.unconditional_tokens, pos_ids]
-        )
+        # Encode unconditional tokens (and their positions into an "unconditional context vector")
+        # Only do this if Negative Prompt is empty
+        if (negativePrompt is None):
+            # print("\nNo negative prompt given")
+            unconditional_tokens = np.array(_UNCONDITIONAL_TOKENS)[None].astype("int32")
+            unconditional_tokens = np.repeat(unconditional_tokens, batch_size, axis=0)
+            self.unconditional_tokens = tf.convert_to_tensor(unconditional_tokens)
+            unconditional_context = self.text_encoder.predict_on_batch(
+                [self.unconditional_tokens, pos_ids]
+            )
+        else:
+            print("...tokenizing negative prompt...")
+             # Tokenize negative prompt (i.e. starting context, but what to avoid)
+            negativeInputs = self.tokenizer.encode(negativePrompt)
+            # assert len(negativeInputs) < 77, "Negative Prompt is too long (should be < 77 tokens)"
+            if len(negativeInputs) > 77:
+                print("Negative prompt is too long (should be < 77 tokens). Truncating down to 77 tokens")
+                negativeInputs = negativeInputs[0:76]
+            negPhrase = negativeInputs + [49407] * (77 - len(negativeInputs))
+
+            print("...encoding negative prompt...")
+            negPhrase = np.array(negPhrase)[None].astype("int32")
+            negPhrase = np.repeat(negPhrase, batch_size, axis=0)
+            unconditional_context = self.text_encoder.predict_on_batch(
+                [negPhrase, pos_ids]
+            )
+
+
+        # Establish time steps
+        print("...establishing time steps...")
         timesteps = np.arange(1, 1000, 1000 // num_steps)
+
+        # Input image time steps
+        print("...establishing input image time steps...")
         input_img_noise_t = timesteps[ int(len(timesteps)*input_image_strength) ]
         latent, alphas, alphas_prev = self.get_starting_parameters(
             timesteps, batch_size, seed , input_image=input_image, input_img_noise_t=input_img_noise_t
@@ -79,6 +153,7 @@ class StableDiffusion:
             timesteps = timesteps[: int(len(timesteps)*input_image_strength)]
 
         # Diffusion stage
+        print("...starting diffusion...\n")
         progbar = tqdm(list(enumerate(timesteps))[::-1])
         for index, timestep in progbar:
             progbar.set_description(f"{index:3d} {timestep:3d}")
@@ -96,6 +171,7 @@ class StableDiffusion:
             )
 
         # Decoding stage
+        print("\n...decoding diffusion...")
         decoded = self.decoder.predict_on_batch(latent)
         decoded = ((decoded + 1) / 2) * 255
         return np.clip(decoded, 0, 255).astype("uint8")
@@ -160,19 +236,41 @@ class StableDiffusion:
             latent = self.add_noise(latent, input_img_noise_t)
             latent = tf.repeat(latent , batch_size , axis=0)
         return latent, alphas, alphas_prev
+    
+    # Load pytorch weights as models
+    def load_weights_from_pytorch_ckpt(self , pytorch_ckpt_path):
+        print("Loading pytorch checkpoint")
+        import torch
+        pt_weights = torch.load(pytorch_ckpt_path, map_location="cpu")
+        for module_name in ['text_encoder', 'diffusion_model', 'decoder', 'encoder' ]:
+            module_weights = []
+            for i , (key , perm ) in enumerate(PYTORCH_CKPT_MAPPING[module_name]):
+                w = pt_weights['state_dict'][key].numpy()
+                if perm is not None:
+                    w = np.transpose(w , perm )
+                module_weights.append(w)
+            getattr(self, module_name).set_weights(module_weights)
+            print("Loaded %d pytorch weights for %s"%(len(module_weights) , module_name))
 
+### Functions
+
+# Get models if we don't already have them
 
 def get_models(img_height, img_width, download_weights=True):
     n_h = img_height // 8
     n_w = img_width // 8
+
+    print("Loading metal device\n")
 
     # Create text encoder
     input_word_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
     input_pos_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
     embeds = CLIPTextTransformer()([input_word_ids, input_pos_ids])
     text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
+    print("Creating text encoder")
 
     # Creation diffusion UNet
+    print("Creating diffusion UNet")
     context = keras.layers.Input((MAX_TEXT_LEN, 768))
     t_emb = keras.layers.Input((320,))
     latent = keras.layers.Input((n_h, n_w, 4))
@@ -182,15 +280,19 @@ def get_models(img_height, img_width, download_weights=True):
     )
 
     # Create decoder
+    print("Creating decoder")
     latent = keras.layers.Input((n_h, n_w, 4))
     decoder = Decoder()
     decoder = keras.models.Model(latent, decoder(latent))
 
+    # Create encoder
+    print("Creating encoder")
     inp_img = keras.layers.Input((img_height, img_width, 3))
     encoder = Encoder()
     encoder = keras.models.Model(inp_img, encoder(inp_img))
     
     if download_weights:
+        print("\nDownloading weights...")
         text_encoder_weights_fpath = keras.utils.get_file(
             origin="https://huggingface.co/fchollet/stable-diffusion/resolve/main/text_encoder.h5",
             file_hash="d7805118aeb156fc1d39e38a9a082b05501e2af8c8fbdc1753c9cb85212d6619",
@@ -209,8 +311,16 @@ def get_models(img_height, img_width, download_weights=True):
             file_hash="56a2578423c640746c5e90c0a789b9b11481f47497f817e65b44a1a5538af754",
         )
 
+        print("...all weights downloaded!\n\nLoading weights...")
+
         text_encoder.load_weights(text_encoder_weights_fpath)
         diffusion_model.load_weights(diffusion_model_weights_fpath)
         decoder.load_weights(decoder_weights_fpath)
         encoder.load_weights(encoder_weights_fpath)
+
+        print("...weights loaded!")
     return text_encoder, diffusion_model, decoder , encoder
+
+def publicPrint(text):
+    print(text)
+    return text
