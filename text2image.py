@@ -43,7 +43,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--steps", type=int, default=50, help="number of ddim sampling steps"
+    "--steps", type=int, default=16, help="number of ddim sampling steps"
 )
 
 parser.add_argument(
