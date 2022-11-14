@@ -24,6 +24,11 @@ tf.get_logger().setLevel(logging.ERROR)
 
 ### Keras module
 from tensorflow import keras
+try:
+   from keras import backend as K
+except Exception as e:
+   print(e)
+   from tensorflow.keras import backend as K
 
 ### Modules for Machine Learning
 from .autoencoder_kl import Decoder, Encoder
@@ -31,6 +36,7 @@ from .diffusion_model import UNetModel
 from .clip_encoder import CLIPTextTransformer
 from .clip_tokenizer import SimpleTokenizer
 from .constants import _UNCONDITIONAL_TOKENS, _ALPHAS_CUMPROD, PYTORCH_CKPT_MAPPING
+import torch as torch
 
 ### Modules for image building
 from PIL import Image
@@ -239,8 +245,7 @@ class StableDiffusion:
     
     # Load pytorch weights as models
     def load_weights_from_pytorch_ckpt(self , pytorch_ckpt_path):
-        print("Loading pytorch checkpoint")
-        import torch
+        print("\nLoading pytorch checkpoint " + pytorch_ckpt_path)
         pt_weights = torch.load(pytorch_ckpt_path, map_location="cpu")
         for module_name in ['text_encoder', 'diffusion_model', 'decoder', 'encoder' ]:
             module_weights = []
@@ -260,11 +265,11 @@ def get_models(img_height, img_width, download_weights=True):
     n_h = img_height // 8
     n_w = img_width // 8
 
-    print("Loading metal device\n")
+    print("\nLoading metal device\n")
 
     # Create text encoder
-    input_word_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
-    input_pos_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype="int32")
+    input_word_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype = "int32")
+    input_pos_ids = keras.layers.Input(shape=(MAX_TEXT_LEN,), dtype = "int32")
     embeds = CLIPTextTransformer()([input_word_ids, input_pos_ids])
     text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
     print("Creating text encoder")
