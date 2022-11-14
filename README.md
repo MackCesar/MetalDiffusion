@@ -112,6 +112,14 @@ cd /Users/MacUser/stable-diffusion-tensorflow-IntelMetal/
 
 ## Usage
 
+### As a Web UI
+
+For a user-friendly interface, use the web UI made with Gradio. With `Terminal` run this command:
+
+```bash
+python dreamWebUI.py
+```
+
 ### As a Python module
 
 You can use the repo as a python module in a custom script:
