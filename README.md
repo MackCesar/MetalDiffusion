@@ -120,6 +120,10 @@ For a user-friendly interface, use the web UI made with Gradio. With `Terminal` 
 python dreamWebUI.py
 ```
 
+The web UI will automatically load into your preferred browser.
+
+To finish the program, in `Terminal` type `CTRL+C` and the program will quit or quit `Terminal` entirely.
+
 ### As a Python module
 
 You can use the repo as a python module in a custom script:
