@@ -83,6 +83,14 @@ class StableDiffusion:
         # Maaaybe float16 will result in faster images? Switch to float16 if global policy says so
         if tf.keras.mixed_precision.global_policy().name == 'mixed_float16':
             self.dtype = tf.float16
+        
+        ## Memory Efficiancy variables
+
+        # Prompts - why re-encode if nothing changed? Specifically for video
+        self.prompt = None
+        self.negativePrompt = None
+        self.encodedPrompt = None
+        self.encodedNegativePrompt = None
 
     # Generate an image
     def generate(
@@ -98,22 +106,38 @@ class StableDiffusion:
         input_image_strength = 0.5,
         input_mask = None
     ):
+        ## Memory Efficiency
+
+        # Prompts
+        if self.prompt != prompt: # New prompt?
+            self.prompt = prompt
+            self.encodedPrompt = None
+        
+        if self.negativePrompt != negativePrompt: # New negative prompt?
+            self.negativePrompt = negativePrompt
+            self.encodedNegativePrompt = None
+        
         # Tokenize prompt (i.e. starting context)
-        print("\n...tokenizing prompt...")
-        inputs = self.tokenizer.encode(prompt)
-        # assert len(inputs) < 77, "Prompt is too long (should be < 77 tokens)"
-        if len(inputs) > 77:
-            print("Prompt is too long (should be < 77 tokens). Truncating down to 77 tokens")
-            inputs = inputs[0:76]
-        phrase = inputs + [49407] * (77 - len(inputs))
-        phrase = np.array(phrase)[None].astype("int32")
-        phrase = np.repeat(phrase, batch_size, axis = 0)
 
         # Encode prompt tokens (and their positions) into a "context vector"
-        print("...encoding the tokenized prompt...")
-        pos_ids = np.array(list(range(77)))[None].astype("int32")
-        pos_ids = np.repeat(pos_ids, batch_size, axis=0)
-        context = self.text_encoder.predict_on_batch([phrase, pos_ids])
+        if self.encodedPrompt is None:
+            print("\n...tokenizing prompt...")
+            inputs = self.tokenizer.encode(prompt)
+            if len(inputs) > 77:
+                print("Prompt is too long (should be < 77 tokens). Truncating down to 77 tokens")
+                inputs = inputs[0:76]
+            phrase = inputs + [49407] * (77 - len(inputs))
+            phrase = np.array(phrase)[None].astype("int32")
+            phrase = np.repeat(phrase, batch_size, axis = 0)
+
+            print("...encoding the tokenized prompt...")
+            pos_ids = np.array(list(range(77)))[None].astype("int32")
+            pos_ids = np.repeat(pos_ids, batch_size, axis=0)
+            context = self.text_encoder.predict_on_batch([phrase, pos_ids])
+            self.encodedPrompt = context
+        else:
+            print("...using cached encoded prompt...")
+            context = self.encodedPrompt
 
         # Prepare the input image, if it was given
         input_image_tensor = None
@@ -147,20 +171,27 @@ class StableDiffusion:
             seed = random.randint(1000, sys.maxsize)
 
         # Tokenize negative prompt or use default padding tokens
-        unconditional_tokens = _UNCONDITIONAL_TOKENS
-        if negativePrompt is not None:
-            inputs = self.tokenizer.encode(negativePrompt)
-            if len(inputs) > 77:
-                print("Prompt is too long (should be < 77 tokens). Truncating down to 77 tokens")
-                inputs = inputs[0:76]
-            unconditional_tokens = inputs + [49407] * (77 - len(inputs))
         
-        # Encode unconditional tokens (and their positions into an "unconditional context vector"
-        unconditional_tokens = np.array(unconditional_tokens)[None].astype("int32")
-        unconditional_tokens = np.repeat(unconditional_tokens, batch_size, axis=0)
-        unconditional_context = self.text_encoder.predict_on_batch(
-            [unconditional_tokens, pos_ids]
-        )
+        if self.encodedNegativePrompt is None:
+            print("...encoding negative prompt...")
+            unconditional_tokens = _UNCONDITIONAL_TOKENS
+            if negativePrompt is not None:
+                inputs = self.tokenizer.encode(negativePrompt)
+                if len(inputs) > 77:
+                    print("Prompt is too long (should be < 77 tokens). Truncating down to 77 tokens")
+                    inputs = inputs[0:76]
+                unconditional_tokens = inputs + [49407] * (77 - len(inputs))
+        
+            # Encode unconditional tokens (and their positions into an "unconditional context vector"
+            unconditional_tokens = np.array(unconditional_tokens)[None].astype("int32")
+            unconditional_tokens = np.repeat(unconditional_tokens, batch_size, axis=0)  
+            unconditional_context = self.text_encoder.predict_on_batch(
+                [unconditional_tokens, pos_ids]
+            )
+            self.encodedNegativePrompt = unconditional_context
+        else:
+            print("...using cached encoded negative prompt...")
+            unconditional_context = self.encodedNegativePrompt
 
         # Establish time steps
         print("...establishing time steps...")
@@ -171,6 +202,7 @@ class StableDiffusion:
         input_img_noise_t = timesteps[ int(len(timesteps)*input_image_strength) ]
 
         # Get starting parameters for generation
+        print("...loading starting parameters...")
         latent, alphas, alphas_prev = self.get_starting_parameters(
             timesteps,
             batch_size,
@@ -179,6 +211,8 @@ class StableDiffusion:
             input_img_noise_t = input_img_noise_t
         )
 
+        # Final timesteps calculation if an input image is given
+        print("...finalizing time steps...")
         if input_image is not None:
             timesteps = timesteps[: int(len(timesteps)*input_image_strength)]
 
