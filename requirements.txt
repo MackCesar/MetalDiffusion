@@ -10,5 +10,4 @@ ftfy==6.1.1
 regex==2022.9.13
 tensorflow-addons==0.17.1
 gradio
-tf_slim
 scikit-image
