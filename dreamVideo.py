@@ -354,10 +354,12 @@ class dreamWorld:
         print(self.prompt)
 
         # Clear up tensorflow memory
+        print("\n...cleaning memory...")
         tf.keras.backend.clear_session()
         gc.collect()
 
         # Use the generator function within the newly created class to generate an array that will become an image
+        print("...getting to work...")
         imgs = self.generator.generate(
             prompt = self.prompt,
             negativePrompt = self.negativePrompt,
@@ -455,9 +457,13 @@ class dreamWorld:
             #if item > 0:
             #    currentFrame = videoUtil.maintain_colors(currentFrame, previousFrame)
 
-            # Clear up memory for the computer
+            # Clear up tensorflow memory
+            print("\n...cleaning memory...")
             tf.keras.backend.clear_session()
-            print(gc.collect())
+            gc.collect()
+
+            # Use the generator function within the newly created class to generate an array that will become an image
+            print("...getting to work...")
             
             previousFrame = currentFrame
 
