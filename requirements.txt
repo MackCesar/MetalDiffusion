@@ -4,8 +4,6 @@ tqdm==4.64.1
 tensorflow==2.10.0
 tensorflow-addons==0.17.1
 tensorflow-estimator
-tensorflow-macos==2.10.0
-tensorflow-metal==0.6.0
 ftfy==6.1.1
 regex==2022.9.13
 gradio
