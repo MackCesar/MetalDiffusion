@@ -14,7 +14,6 @@ import random
 ### Tensorflow modules
 
 import tensorflow as tf
-import tf_slim as slim
 try:
    from keras import backend as K
 except Exception as e:
