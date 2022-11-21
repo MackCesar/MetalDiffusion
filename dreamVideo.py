@@ -228,7 +228,7 @@ class dreamWorld:
         global model
         global modelsLocation
 
-        print(color.BLUE, color.BOLD, "\nStarting Stable Diffusion with Tensor flow and Apple Metal.", color.END)
+        print(color.BLUE, color.BOLD,"\nStarting Stable Diffusion with Tensor flow and Apple Metal",color.END)
         programStarted = True
 
         # Which Mdoel to use? If the default tensorflow version is selected, then we'll download it!
@@ -240,7 +240,7 @@ class dreamWorld:
         if self.seed is None or 0:
             self.seed = random.randint(0, 2 ** 31)
         
-        print(color.CYAN,color.BOLD,"Loading Metal, connecting to GPU, and compiling Stable Diffusion models",color.END,"\n")
+        print("\nLoading Metal, connecting to GPU, and compiling Stable Diffusion")
 
         # Create generator with StableDiffusion class
         self.generator = StableDiffusion(
@@ -325,10 +325,13 @@ class dreamWorld:
             # Create still image(s)
             result = self.generateArt()
 
-            return result
+            videoResult = None
+
+            return result, videoResult
         elif type == "Cinema":
             # Create video
-            self.generateCinema(
+            result = None
+            videoResult = self.generateCinema(
                 projectName = projectName,
                 seedBehavior = seedBehavior,
                 angle = angle,
@@ -337,6 +340,8 @@ class dreamWorld:
                 yTranslation = yTranslation,
                 saveVideo = saveVideo
             )
+            
+            return result, videoResult
 
     def generateArt(self):
 
@@ -902,7 +907,7 @@ with gr.Blocks(
             xTranslate,
             yTranslate
         ],
-        outputs = result
+        outputs = [result, resultVideo]
     )
     
     # When new seed is pressed
@@ -939,5 +944,6 @@ print("\nLaunching Gradio\n")
 
 demo.launch(
     inbrowser = True,
-    show_error = True
+    show_error = True,
+    share = True
 )
