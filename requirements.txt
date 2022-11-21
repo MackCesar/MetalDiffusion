@@ -1,9 +1,13 @@
 h5py==3.7.0
 Pillow==9.2.0
 tqdm==4.64.1
-tensorflow==2.10.0
+tensorboard==2.10.1
+tensorboard-data-server==0.6.1
+tensorboard-plugin-wit==1.8.1
 tensorflow-addons==0.17.1
-tensorflow-estimator
+tensorflow-estimator==2.10.0
+tensorflow-macos==2.10.0
+tensorflow-metal==0.6.0
 ftfy==6.1.1
 regex==2022.9.13
 gradio
