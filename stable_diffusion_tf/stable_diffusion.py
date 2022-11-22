@@ -120,7 +120,7 @@ class StableDiffusion:
         # Tokenize prompt (i.e. starting context)
 
         # Encode prompt tokens (and their positions) into a "context vector"
-        if self.encodedPrompt is None:
+        if self.encodedPrompt is None or self.encodedNegativePrompt is None:
             print("\n...tokenizing prompt...")
             inputs = self.tokenizer.encode(prompt)
             if len(inputs) > 77:
