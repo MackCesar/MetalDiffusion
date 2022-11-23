@@ -53,7 +53,6 @@ import gradio as gr
 print("...WebUI module loaded...")
 
 ### Misc Modules
-import utilities.deviceTest as deviceTest
 import utilities.modelFinder as mf
 import utilities.settingsControl as settingsControl
 import utilities.readWriteFile as readWriteFile
@@ -283,6 +282,7 @@ class dreamWorld:
         zoom = float("1"),
         xTranslation = "0",
         yTranslation = "0",
+        startingFrame = 0,
     ):
         
         # Update object variables that don't trigger a re-compile
@@ -338,7 +338,8 @@ class dreamWorld:
                 zoom = zoom,
                 xTranslation = xTranslation,
                 yTranslation = yTranslation,
-                saveVideo = saveVideo
+                saveVideo = saveVideo,
+                startingFrame = int(startingFrame)
             )
             
             return result, videoResult
@@ -388,7 +389,7 @@ class dreamWorld:
         for img in imgs:
             print("Processing image!")
             imageFromBatch = Image.fromarray(img)
-            imageFromBatch.save(creationLocation + str(self.seed) + str(int(self.batchSize)) + ".png", pnginfo = metaData)
+            imageFromBatch.save(creationLocation + str(int(self.seed)) + str(int(self.batchSize)) + ".png", pnginfo = metaData)
             print("Image saved!\n")
             self.batchSize = self.batchSize - 1
 
@@ -405,7 +406,8 @@ class dreamWorld:
         zoom = float("1"),
         xTranslation = "0",
         yTranslation = "0",
-        saveVideo = True
+        saveVideo = True,
+        startingFrame = 0
     ):
 
         # Before creation/generation, did we compile the model?
@@ -452,10 +454,23 @@ class dreamWorld:
         # Create frames
         for item in range(0, self.totalFrames):
 
-            print("\nGenerating Frame ",item)
+            frameNumber = item + startingFrame
+
+            print("\nGenerating Frame ",frameNumber)
 
             #if item > 0:
             #    currentFrame = videoUtil.maintain_colors(currentFrame, previousFrame)
+
+            if startingFrame > 0 and item == 0:
+                currentFrame = videoUtil.animateFrame2DWarp(
+                    currentFrame,
+                    angle = angle,
+                    zoom = zoom,
+                    xTranslation = xTranslation[item],
+                    yTranslation = yTranslation[item],
+                    width = self.width,
+                    height = self.height
+                )
 
             # Clear up tensorflow memory
             print("\n...cleaning memory...")
@@ -480,9 +495,14 @@ class dreamWorld:
                 input_image_strength = self.input_image_strength
             )
 
-            # Save frame
+            ## Save frame
             print(color.GREEN,"\nFrame generated. Saving to: ",path,color.END)
-            Image.fromarray(frame[0]).save(f"{path}/frame_{item:05}.png", format = "png")
+            # Generate metadata for saving in the png file
+            metaData = PngInfo()
+            metaData.add_text('seed:', str(int(seed)))
+            metaData.add_text('prompt:', self.prompt)
+            metaData.add_text('negative prompt:', self.negativePrompt)
+            Image.fromarray(frame[0]).save(f"{path}/frame_{frameNumber:05}.png", format = "png", pnginfo = metaData)
 
             # Store frame array for next iteration
             currentFrame = videoUtil.animateFrame2DWarp(
@@ -498,6 +518,7 @@ class dreamWorld:
             #Memmory Clean Up
             frame = None
             previousFrame = None
+            metaData = None
 
             # Update seed
             if seedBehavior == "Positive Iteration":
@@ -639,7 +660,7 @@ inputImageStrength = gr.Slider(
     minimum = 0,
     maximum = 1,
     value = 0.5,
-    step = 0.1,
+    step = 0.01,
     label = "Input Image Strength - 0 = Don't change the image, 1 = ignore image entirely"
 )
 
@@ -683,6 +704,13 @@ videoFPS = gr.Dropdown(
 totalFrames = gr.Number(
     value = 48,
     label = "Total Frames",
+)
+
+# Starting frame
+
+startingFrame = gr.Number(
+    value = 0,
+    label = "Starting Frame Number"
 )
 
 # Seed behavior
@@ -860,6 +888,8 @@ with gr.Blocks(
 
                 totalFrames.render()
 
+                startingFrame.render()
+
                 seedBehavior.render()
 
                 saveVideo.render()
@@ -911,7 +941,8 @@ with gr.Blocks(
             angle,
             zoom,
             xTranslate,
-            yTranslate
+            yTranslate,
+            startingFrame
         ],
         outputs = [result, resultVideo]
     )
