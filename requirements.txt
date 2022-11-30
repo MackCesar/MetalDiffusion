@@ -12,3 +12,4 @@ ftfy==6.1.1
 regex==2022.9.13
 gradio
 scikit-image
+torch
