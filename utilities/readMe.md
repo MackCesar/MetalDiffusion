@@ -1,4 +1,4 @@
-# These scripts are usefule on their own and within the dream apps
+# Utilities
 
 ## modelFinder.py
 **Model Finder** is a script that locates the models, .ckpt's, and .h5's for the program.
