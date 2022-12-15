@@ -139,6 +139,24 @@ This will launch the webUI and will create a public link through Gradio. This is
 
 To finish the program, in `Terminal` type `CTRL+C` and the program will quit or quit `Terminal` entirely.
 
+## Legacy vs Contemporary Mode
+
+Stable Diffusion 2.0 (SD) uses two different models than SD 1.4 and 1.5. It's important to select the correct mode when creating with your model(s).
+
+Under *Advanced Settings*, select your model. Then select `Use Legacy Stable Diffusion` if you are using any SD models made prior to the release of SD 2.0.
+
+#### Differences between the legacy model and contemporary model
+
+What changed between the two models were:
+
+#####The Text Encoder model:
+
+SD1.4/1.5 uses OpenAI's CLIP Encoder model
+SD2.x uses the OPENClip Encoder model
+
+#####The Unet architecture:
+The Unet is located inside the diffusion model, and what changed between was the architecture of the Unet.
+
 ## Example outputs 
 
 The following outputs have been generated using this implementation:
