@@ -6,9 +6,6 @@ import random
 import sys
 import warnings
 import argparse
-
-### Memory Management
-import gc #Garbage Collector
 import time
 
 print("\n...system modules loaded...")
@@ -18,29 +15,31 @@ import numpy as np
 
 print("...math modules loaded...")
 
-### Import tensorflow module, but with supressed warnings to clear up the terminal outputs
-# Filter tensorflow version warnings
-# https://stackoverflow.com/questions/40426502/is-there-a-way-to-suppress-the-messages-tensorflow-prints/40426709
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
-# https://stackoverflow.com/questions/15777951/how-to-suppress-pandas-future-warning
-warnings.simplefilter(action='ignore', category=FutureWarning)
-warnings.simplefilter(action='ignore', category=Warning)
-import tensorflow as tf
-
-tf.get_logger().setLevel('INFO')
-tf.autograph.set_verbosity(0)
-tf.get_logger().setLevel(logging.ERROR)
-
-from tensorflow import keras
-
-print("...tensorflow module loaded...")
-
 ### Import Stable Diffusion module, Tensorflow version
 from stable_diffusion_tf.stable_diffusion import StableDiffusion, get_models
 
 print("...Stable Diffusion Tensorflow module loaded...")
 
-import cv2
+### Import tensorflow module, but with supressed warnings to clear up the terminal outputs
+# Filter tensorflow version warnings
+# https://stackoverflow.com/questions/40426502/is-there-a-way-to-suppress-the-messages-tensorflow-prints/40426709
+#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # or any {'0', '1', '2'}
+# https://stackoverflow.com/questions/15777951/how-to-suppress-pandas-future-warning
+#warnings.simplefilter(action='ignore', category=FutureWarning)
+#warnings.simplefilter(action='ignore', category=Warning)
+#import tensorflow as tf
+
+#tf.get_logger().setLevel('INFO')
+#tf.autograph.set_verbosity(0)
+#tf.get_logger().setLevel(logging.ERROR)
+
+#from tensorflow import keras
+
+#print("...tensorflow module loaded...")
+
+import torch as torch
+
+#import cv2
 ### Image saving after generation modules
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
@@ -62,41 +61,15 @@ print("...all modules loaded!")
 
 ### Global Variables
 print("\nCreating global variables...")
-finalImage = ()
 programStarted = False
-publicText = "Welcome!"
-result = None
-program = None
-generator = None
 model = None
-# Custom settings - Factory defaults
-stepsMax = 64
-scaleMax = 20
-batchMax = 8
-defaultBatchSize = 4
-modelsLocation = "models/"
-defaultModel = "samdoesarts v2.ckpt"
-maxMemory = 229376
-creationLocation = "creations/"
+dreamer = None
 # Try loading custom settings from user file, otherwise continue with factory settings
-try:
-    userSettings = settingsControl.loadSettings("userData/userPreferences.txt")
-    stepsMax, scaleMax, batchMax, defaultBatchSize, modelsLocation, defaultModel, maxMemory, creationLocation = [userSettings[i] for i in range(8)]
-except Exception as e:
-    print("Factory defaults loaded!\nCreating new preferences file.")
-    print(e)
-    settingsControl.createUserPreferences(
-        "userData/userPreferences.txt",
-        [
-            stepsMax,
-            scaleMax,
-            batchMax,
-            defaultBatchSize,
-            modelsLocation,
-            defaultModel,
-            maxMemory,
-            creationLocation
-        ]
+userSettings = settingsControl.loadSettings("userData/userPreferences.txt")
+if userSettings is False: # This means loadSettings() couldn't find the file. Time to create one
+    # The factory settings are hard coded in the settingsControl.py file under createUserPreferences()
+    userSettings = settingsControl.createUserPreferences(
+        fileLocation = "userData/userPreferences.txt"
     )
 
 ## Colors (part of global variables)
@@ -120,6 +93,26 @@ except Exception as e:
     starterPrompt = []
 
 print("...global variables created!")
+
+### Command Line (CLI) Overrides:
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "--share",
+    default = False,
+    action = "store_true",
+    help = "Share Gradio app publicly",
+)
+
+parser.add_argument(
+    "--inBrowser",
+    default = False,
+    action = "store_true",
+    help = "Automatically launch app in web browser",
+)
+
+CLIOverride = parser.parse_args()
 
 ### Functions
 
@@ -172,6 +165,116 @@ def switchResult(type):
         videoResult = gr.Video.update(visible = True)
         return artResult, videoResult
 
+def saveModel(
+    name = "model",
+    type = ""
+):
+    # load our main object/class
+    global dreamer
+
+    # Have we compiled any models already?
+    if dreamer.generator is None:
+        print("Compiling models")
+        dreamer.compileDreams()
+    
+    # Set local variables
+    model = dreamer.generator
+    fileName = []
+
+    for modelType in ["text_encoder", "diffusion_model", "decoder", "encoder"]:
+        fileName.append(name + "_" + modelType + type)
+
+    # Load/create folder to save frames in
+    path = f"models/{name}"
+    if not os.path.exists(path): #If it doesn't exist, create folder
+        os.makedirs(path)
+    
+    # Save Text Encoder
+    print("\nSaving model as:\n",fileName[0])
+    model.text_encoder.save(path + fileName[0])
+    print(color.GREEN,"Model saved!",color.END)
+
+    # Save Diffusion Model
+    print("\nSaving model as:\n",fileName[1])
+    model.diffusion_model.save(path + fileName[1])
+    print(color.GREEN,"Model saved!",color.END)
+
+    # Save Decoder
+    print("\nSaving model as:\n",fileName[2])
+    model.decoder.save(path + fileName[2])
+    print(color.GREEN,"Model saved!",color.END)
+
+    # Save Encoder
+    print("\nSaving model as:\n",fileName[3])
+    model.encoder.save(path + fileName[3])
+    print(color.GREEN,"Model saved!",color.END)
+
+def checkModel(selectedModel, legacy):
+    # load our main object/class
+    global dreamer
+
+    dreamer.pytorchModel = selectedModel
+
+    dreamer.legacy = legacy
+
+    # Have we compiled any models already?
+    if dreamer.generator is None:
+        print("Compiling models")
+        dreamer.compileDreams()
+    
+    # Set local variables
+    model = dreamer.generator
+
+    print("\nText Encoder Model Summary")
+    model.text_encoder.summary()
+
+    print("\nDiffusion Model Summary")
+    model.diffusion_model.summary()
+    model.diffusion_model.layers[3].summary()
+
+    print("\nDecoder Model Summary")
+    model.decoder.summary()
+
+    print("\nEncoder Model Summary")
+    model.encoder.summary()
+
+def analyzeModelWeights(model):
+
+    print("\nAnalyzing model weights for: ", model)
+
+    print("...analyzing...")
+
+    pytorchWeights = torch.load(modelsLocation + model, map_location = "cpu")
+
+    print("...done!")
+
+    print("Saving analysis...")
+    
+    if readWriteFile.writeToFile(modelsLocation + model.replace(".ckpt","-analysis.txt"), pytorchWeights, True):
+        print("...done!")
+
+def checkTime(start, end):
+    totalMin = 0
+    totalSec = 0
+    totalHour = 0
+
+    totalTime = end - start
+
+    if totalTime > 60: #Convert to minutes
+        totalMin = totalTime // 60
+        totalSec = totalTime - (totalMin)*60
+        if totalMin > 60: #Convert to hours
+            totalHour = totalMin // 60
+            totalMin = totalMin - (totalHour)*60
+            print(totalHour,"hr ",totalMin,"min ",totalSec,"sec")
+        else:
+            print(totalMin,"min ",totalSec,"sec")
+    else:
+        totalSec = totalTime
+        print(totalSec,"seconds")
+
+    return totalTime
+
 ### Classes
 
 print("Creating classes...")
@@ -215,6 +318,7 @@ class dreamWorld:
         self.videoFPS = 24
         self.totalFrames = totalFrames
         self.generator = None
+        self.legacy = True
 
         ## Object variable corrections
         # Set seed if not given
@@ -223,9 +327,12 @@ class dreamWorld:
 
     def compileDreams(self):
 
+        # Time Keeping
+        start = time.perf_counter()
+
         global programStarted
         global model
-        global modelsLocation
+        global userSettings
 
         print(color.BLUE, color.BOLD,"\nStarting Stable Diffusion with Tensor flow and Apple Metal",color.END)
         programStarted = True
@@ -239,23 +346,28 @@ class dreamWorld:
         if self.seed is None or 0:
             self.seed = random.randint(0, 2 ** 31)
         
-        print("\nLoading Metal, connecting to GPU, and compiling Stable Diffusion")
+        # Are we using a pytroch model? If downloadWeights is fale, then yes we are!
+        if self.pytorchModel != "Stable Diffusion 1.4":
+            if self.pytorchModel is None:
+                self.pytorchModel = userSettings["defaultModel"]
+            modelLocation = userSettings["modelsLocation"] + self.pytorchModel
+            model = self.pytorchModel
 
         # Create generator with StableDiffusion class
         self.generator = StableDiffusion(
             img_height = int(self.height),
             img_width = int(self.width),
             jit_compile = self.jitCompile,
-            download_weights = downloadWeights
+            download_weights = downloadWeights,
+            pyTorchWeights = modelLocation,
+            legacy = self.legacy
         )
-
-        # Are we using a pytroch model? If downloadWeights is fale, then yes we are!
-        if self.pytorchModel != "Stable Diffusion 1.4":
-            modelLocation = modelsLocation + self.pytorchModel
-            self.generator.load_weights_from_pytorch_ckpt(modelLocation)
-            model = self.pytorchModel
         
         print(color.GREEN,color.BOLD,"\nModel ready!",color.END)
+
+        # Time keeping
+        end = time.perf_counter()
+        checkTime(start, end)
     
     def create(
         self,
@@ -283,6 +395,7 @@ class dreamWorld:
         xTranslation = "0",
         yTranslation = "0",
         startingFrame = 0,
+        legacy = True
     ):
         
         # Update object variables that don't trigger a re-compile
@@ -293,16 +406,19 @@ class dreamWorld:
         self.seed = seed
         self.input_image = inputImage
         self.input_image_strength = inputImageStrength
-        self.pytorchModel = pytorchModel
-        self.batchSize = batchSize
         self.saveSettings = saveSettings
+        self.batchSize = batchSize
         # Video object variables that don't trigger
         self.animateFPS = animateFPS
         self.videoFPS = videoFPS
         self.totalFrames = int(totalFrames)
+        self.legacy = legacy
 
         # Update object variables that trigger a re-compile
-        if width != self.width or height != self.height or batchSize != self.batchSize or pytorchModel != self.pytorchModel:
+        if width != self.width or height != self.height or pytorchModel != self.pytorchModel:
+            print("\nCritical changes made for creation, compiling new model")
+            print("New inputs: \n",width,height,batchSize,pytorchModel)
+            print("Old inputs: \n",self.width,self.height,self.batchSize, self.pytorchModel)
             # Load all of the re-compile variables
             self.width = int(width)
             self.height = int(height)
@@ -345,6 +461,11 @@ class dreamWorld:
             return result, videoResult
 
     def generateArt(self):
+        # Global variables
+        global userSettings
+        
+        # Time Keeping
+        start = time.perf_counter()
 
         # Before creation/generation, did we compile the model?
         if self.generator is None:
@@ -354,13 +475,7 @@ class dreamWorld:
 
         print(self.prompt)
 
-        # Clear up tensorflow memory
-        print("\n...cleaning memory...")
-        tf.keras.backend.clear_session()
-        gc.collect()
-
         # Use the generator function within the newly created class to generate an array that will become an image
-        print("...getting to work...")
         imgs = self.generator.generate(
             prompt = self.prompt,
             negativePrompt = self.negativePrompt,
@@ -383,24 +498,27 @@ class dreamWorld:
 
         # Save settings
         if self.saveSettings is True:
-            readWriteFile.writeToFile("creations/" + str(self.seed) + ".txt", [self.prompt, self.negativePrompt, self.width, self.height, self.scale, self.steps, self.seed, self.pytorchModel, self.batchSize, self.input_image_strength])
+            readWriteFile.writeToFile("creations/" + str(self.seed) + ".txt", [self.prompt, self.negativePrompt, self.width, self.height, self.scale, self.steps, self.seed, self.pytorchModel, self.batchSize, self.input_image_strength, self.animateFPS, self.videoFPS, self.totalFrames, "Positive Iteration", "0", "0", "0", "0"])
 
         # Multiple Image result:
         for img in imgs:
             print("Processing image!")
             imageFromBatch = Image.fromarray(img)
-            imageFromBatch.save(creationLocation + str(int(self.seed)) + str(int(self.batchSize)) + ".png", pnginfo = metaData)
+            imageFromBatch.save(userSettings["creationLocation"] + str(int(self.seed)) + str(int(self.batchSize)) + ".png", pnginfo = metaData)
             print("Image saved!\n")
             self.batchSize = self.batchSize - 1
 
         print("Returning image!",color.END)
+
+        # Time keeping
+        end = time.perf_counter()
+        checkTime(start, end)
+
         return imgs
     
     def generateCinema(
         self,
         projectName = "noProjectNameGiven",
-        animateFPS = 12,
-        totalFrames = 24,
         seedBehavior = "Positive Iteration",
         angle = float("0"),
         zoom = float("1"),
@@ -415,18 +533,25 @@ class dreamWorld:
             self.compileDreams()
         
         # Load in global variables
-        global creationLocation
+        global userSettings
 
         print(color.PURPLE, "\nGenerating frames of:", color.END)
 
         print(self.prompt)
 
-        # Local function variable creation
+        # Local variables
         seed = self.seed
-        previousFrame = None
-        currentFrame = self.input_image
+        previousFrame = self.input_image
+        currentInputFrame = None
+        renderTime = 0
 
-        # Movement variabls
+        # Load/create folder to save frames in
+        path = f"content/{projectName}"
+        if not os.path.exists(path): #If it doesn't exist, create folder
+            os.makedirs(path)
+        print("\nIn folder: ",path)
+
+        # Movement variables
         angle = float(angle)
         zoom = float(zoom)
 
@@ -435,16 +560,11 @@ class dreamWorld:
         
         if yTranslation is None:
             yTranslation = "0"
-
+        
+        print("...giving camera direction...")
         originalTranslations = [xTranslation, yTranslation]
         xTranslation = videoUtil.generate_frames_translation(xTranslation, self.totalFrames)
         yTranslation = videoUtil.generate_frames_translation(yTranslation, self.totalFrames)
-
-        # Load/create folder to save frames in
-        path = f"content/{projectName}"
-        if not os.path.exists(path): #If it doesn't exist, create folder
-            os.makedirs(path)
-        print("\nIn folder: ",path)
 
         # Save settings BEFORE running generation in case it crashes
 
@@ -452,18 +572,22 @@ class dreamWorld:
             readWriteFile.writeToFile(path + "/" + str(self.seed) + ".txt", [self.prompt, self.negativePrompt, self.width, self.height, self.scale, self.steps, self.seed, self.pytorchModel, self.batchSize, self.input_image_strength, self.animateFPS, self.videoFPS, self.totalFrames, seedBehavior, angle, zoom, originalTranslations[0], originalTranslations[1]])
         
         # Create frames
-        for item in range(0, self.totalFrames):
+        for item in range(0, (self.totalFrames) ): # Minus 1 from total frames because we're starting at 0 instead of 1 when counting up. User asks for 24 frames, computer counts from 0 to 23
 
+            # Time Keeping
+            start = time.perf_counter()
+
+            # Update frame number
+            # If starting frame is given, then we're also adding every iteration to the number
             frameNumber = item + startingFrame
 
             print("\nGenerating Frame ",frameNumber)
 
-            #if item > 0:
-            #    currentFrame = videoUtil.maintain_colors(currentFrame, previousFrame)
-
+            # Continue camera movement from prior frame if starting frame was given
             if startingFrame > 0 and item == 0:
-                currentFrame = videoUtil.animateFrame2DWarp(
-                    currentFrame,
+                print("...continuing camera movement...")
+                previousFrame = videoUtil.animateFrame2DWarp(
+                    previousFrame,
                     angle = angle,
                     zoom = zoom,
                     xTranslation = xTranslation[item],
@@ -471,18 +595,16 @@ class dreamWorld:
                     width = self.width,
                     height = self.height
                 )
-
-            # Clear up tensorflow memory
-            print("\n...cleaning memory...")
-            tf.keras.backend.clear_session()
-            gc.collect()
-
-            # Use the generator function within the newly created class to generate an array that will become an image
-            print("...getting to work...")
             
-            previousFrame = currentFrame
+            # Color management
+            if currentInputFrame is not None:
+                previousFrame = videoUtil.maintain_colors(previousFrame, currentInputFrame)
+            
+            # Update previous frame variable for use in the generation of this frame
+            currentInputFrame = previousFrame
 
-            # Use the generator function within the newly created class to generate an array that will become an image
+            ## Create frame
+            # frame variable calls the generator to generate an image
             frame = self.generator.generate(
                 prompt = self.prompt,
                 negativePrompt = self.negativePrompt,
@@ -491,12 +613,13 @@ class dreamWorld:
                 temperature = 1,
                 batch_size = self.batchSize,
                 seed = seed,
-                input_image = previousFrame,
+                input_image = currentInputFrame,
                 input_image_strength = self.input_image_strength
             )
 
             ## Save frame
             print(color.GREEN,"\nFrame generated. Saving to: ",path,color.END)
+
             # Generate metadata for saving in the png file
             metaData = PngInfo()
             metaData.add_text('seed:', str(int(seed)))
@@ -505,7 +628,8 @@ class dreamWorld:
             Image.fromarray(frame[0]).save(f"{path}/frame_{frameNumber:05}.png", format = "png", pnginfo = metaData)
 
             # Store frame array for next iteration
-            currentFrame = videoUtil.animateFrame2DWarp(
+            print("...applying camera movement for next frame...")
+            previousFrame = videoUtil.animateFrame2DWarp(
                 frame[0],
                 angle = angle,
                 zoom = zoom,
@@ -514,21 +638,33 @@ class dreamWorld:
                 width = self.width,
                 height = self.height
             )
+
+            # Color management
+            # if item > 0:
+            #    previousFrame = videoUtil.maintain_colors(previousFrame, frame[0])
             
-            #Memmory Clean Up
+            # Memmory Clean Up
             frame = None
-            previousFrame = None
             metaData = None
 
             # Update seed
             if seedBehavior == "Positive Iteration":
                 seed = seed + 1
+            
+            # Time keeping
+            end = time.perf_counter()
+            renderTime = renderTime + checkTime(start, end)
         
-        print(color.GREEN,"\nCINEMA! Done",color.END)
+        # Finished message and time keeping
+        print(color.GREEN,"\nCINEMA! Created in:",color.END)
+        checkTime(0, renderTime)
+        print("Per frame:")
+        checkTime(0, renderTime/(self.totalFrames))
 
+        ## Video compiling
         if saveVideo is True:
             finalVideo = self.deliverCinema(
-                path, creationLocation, projectName
+                path, userSettings["creationLocation"], projectName
             )
 
             return finalVideo
@@ -543,8 +679,9 @@ class dreamWorld:
 
         return videoPath
 
-print("...classes created. Starting program:")
+print("...classes created.\n",color.GREEN,"Starting program:",color.END)
 
+### Main class ###
 dreamer = dreamWorld()
 
 ### Main Web UI Layout ###
@@ -566,7 +703,7 @@ negativePrompt = gr.Textbox(
 
 creationType = gr.Radio(
     choices = ["Art", "Cinema"],
-    value = "Art",
+    value = userSettings["creationType"],
     label = "Creation Type:"
 )
 
@@ -597,8 +734,8 @@ width = gr.Dropdown(
 
 batchSizeSelect = gr.Slider(
     minimum = 1,
-    maximum = int(batchMax),
-    value = int(defaultBatchSize),
+    maximum = int(userSettings["batchMax"]),
+    value = int(userSettings["defaultBatchSize"]),
     step = 1,
     label = "Batch Size - How many results to make?"
 )
@@ -608,8 +745,8 @@ batchSizeSelect = gr.Slider(
 # Steps
 steps = gr.Slider(
     minimum = 2,
-    maximum = int(stepsMax),
-    value = int(stepsMax) / 2,
+    maximum = int(userSettings["stepsMax"]),
+    value = int(userSettings["stepsMax"]) / 2,
     step = 1,
     label = "Steps - How many times the AI should sample - Higher numbers = better image"
 )
@@ -617,7 +754,7 @@ steps = gr.Slider(
 # Scale
 scale = gr.Slider(
     minimum = 2,
-    maximum = int(scaleMax),
+    maximum = int(userSettings["scaleMax"]),
     value = 7.5,
     step = 0.1,
     label = "Guidance Scale - How closely should the AI follow the prompt - Higher number = follow more closely"
@@ -634,19 +771,24 @@ seed = gr.Number(
 
 # Models/weights
 
-modelsWeights = mf.findModels(modelsLocation, ".ckpt")
+modelsWeights = mf.findModels(userSettings["modelsLocation"], ".ckpt")
 
 listOfModels = gr.Dropdown(
             choices = modelsWeights,
             label = "Model",
-            value = defaultModel
+            value = userSettings["defaultModel"]
         )
+
+legacyVersion = gr.Checkbox(
+    label = "Use Legacy Stable Diffusion",
+    value = bool(userSettings["legacyVersion"])
+)
 
 # Save user settings for prompt
 
 saveSettings = gr.Checkbox(
     label = "Save settings used for prompt creation?",
-    value = True
+    value = bool(userSettings["saveSettings"])
 )
 
 ## Input Image
@@ -661,7 +803,7 @@ inputImageStrength = gr.Slider(
     maximum = 1,
     value = 0.5,
     step = 0.01,
-    label = "Input Image Strength - 0 = Don't change the image, 1 = ignore image entirely"
+    label = "0 = Don't change the image, 1 = ignore image entirely"
 )
 
 # Prompt Engineering
@@ -759,14 +901,39 @@ yTranslate = gr.Textbox(
 
 ## Tools
 
-# Save and convert pytorch models
-
-saveModelLocation = gr.Textbox(
-    label = "Where to save the converted model",
-    value = "models/"
+saveModelName = gr.Textbox(
+    label = "Model Name",
+    value = "model"
 )
 
-saveModelTool = gr.Button("Save Model")
+saveModelButton = gr.Button("Save model")
+
+pruneModelButton = gr.Button("Optimize Model")
+
+checkModelButton = gr.Button("Check Model")
+
+analyzeModelWeightsButton = gr.Button("Analyze Model Weights")
+
+# Video Tools
+convertToVideoButton = gr.Button("Convert to video")
+
+# input frames
+framesFolder = gr.Textbox(
+    label = "Frames folder path",
+    value = ""
+)
+
+# creations location
+creationsFolder = gr.Textbox(
+    label = "Save Location",
+    value = userSettings["creationLocation"]
+)
+
+# video name
+videoFileName = gr.Textbox(
+    label = "Video Name",
+    value = "cinema"
+)
 
 ## Result(s)
 
@@ -846,20 +1013,38 @@ with gr.Blocks(
 
                         newSeed = gr.Button("New Seed")
             with gr.Tab("Advanced Settings"):
-                # Model Selection
-                listOfModels.render()
+
+                with gr.Row():
+                    # Model Selection
+                    listOfModels.render()
+
+                    # Legacy Edition
+                    legacyVersion.render()
 
                 # Save settings used for creation?
                 saveSettings.render()
 
-            with gr.Tab("Input Image"):
-                gr.Markdown("Feed a starting image into the AI to give it inspiration")
+            with gr.Tab("Import"):
 
-                inputImage.render()
+                with gr.Tab("Image"):
+                    ## Input Image
+                    gr.Markdown("<center><b><u>Input Image</b></u></center>Feed a starting image into the AI to give it inspiration")
 
-                # Input Image Strength
+                    inputImage.render()
 
-                inputImageStrength.render()
+                    # Input Image Strength
+
+                    gr.Markdown("Strength")
+
+                    inputImageStrength.render()
+
+                with gr.Tab("Creation"):
+                    ## Import prior prompt and settings
+                    gr.Markdown("<center><b><u>Import Creation</b></u></center>Import prior prompt and generator settings")
+                    
+                    importPromptLocation.render()
+                    
+                    importPromptButton.render()
 
             with gr.Tab("Prompt Generator"):
                 gr.Markdown("Tools to generate useful prompts")
@@ -869,40 +1054,65 @@ with gr.Blocks(
                     item.render()
 
                 addPrompt.render()
-
-            with gr.Tab("Import"):
-                # Import prior prompt and settings
-                gr.Markdown("Import prior prompt and generator settings")
-                importPromptLocation.render()
-                importPromptButton.render()
             
             with gr.Tab("Video"):
+
+                with gr.Tab("Settings"):
+
+                    projectName.render()
+
+                    animatedFPS.render()
+                    
+                    videoFPS.render()
+
+                    totalFrames.render()
+
+                    startingFrame.render()
+
+                    seedBehavior.render()
+
+                    saveVideo.render()
                 
-                gr.Markdown("<center><b>Video Settings</b></center>")
+                with gr.Tab("Camera Movement"):
 
-                projectName.render()
+                    angle.render()
 
-                animatedFPS.render()
+                    zoom.render()
+
+                    xTranslate.render()
+
+                    yTranslate.render()
                 
-                videoFPS.render()
+                with gr.Tab("Tools"):
+                    with gr.Row():
 
-                totalFrames.render()
+                        with gr.Column():
 
-                startingFrame.render()
+                            framesFolder.render()
 
-                seedBehavior.render()
+                            creationsFolder.render()
+                        
+                        with gr.Column():
 
-                saveVideo.render()
+                            videoFileName.render()
 
-                gr.Markdown("<center><b>Movement Settings</b></center>")
+                            convertToVideoButton.render()
+            
+            with gr.Tab("Tools"):
 
-                angle.render()
+                gr.Markdown("<center>Save Current Model</center>")
 
-                zoom.render()
+                with gr.Row():
 
-                xTranslate.render()
+                    saveModelName.render()
 
-                yTranslate.render()
+                    saveModelButton.render()
+                
+                #pruneModelButton.render()
+
+                checkModelButton.render()
+
+                analyzeModelWeightsButton.render()
 
         with gr.Column():
             # Result
@@ -942,7 +1152,8 @@ with gr.Blocks(
             zoom,
             xTranslate,
             yTranslate,
-            startingFrame
+            startingFrame,
+            legacyVersion
         ],
         outputs = [result, resultVideo]
     )
@@ -977,10 +1188,38 @@ with gr.Blocks(
 
     ## Tools
 
-print("\nLaunching Gradio\n")
+    # Save Model
+
+    saveModelButton.click(
+        fn = saveModel,
+        inputs = saveModelName,
+        outputs = None
+    )
+
+    # Check Model
+
+    checkModelButton.click(
+        fn = checkModel,
+        inputs = [listOfModels, legacyVersion],
+        outputs = None
+    )
+
+    convertToVideoButton.click(
+        fn = dreamer.deliverCinema,
+        inputs = [framesFolder, creationsFolder, videoFileName],
+        outputs = resultVideo
+    )
+
+    analyzeModelWeightsButton.click(
+        fn = analyzeModelWeights,
+        inputs = listOfModels,
+        outputs = None
+    )
+
+print(color.BLUE,"\nLaunching Gradio\n",color.END)
 
 demo.launch(
-    inbrowser = True,
+    inbrowser = CLIOverride.inBrowser,
     show_error = True,
-    share = True
+    share = CLIOverride.share
 )
