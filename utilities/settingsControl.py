@@ -7,20 +7,18 @@ import os, fnmatch, sys, configparser
 def loadSettings(fileLocation, returnType = 0):
     try:
         # Load config file
-        print("Loading user preferences...")
         config = configparser.ConfigParser() # use configparser to read the config file
         config.read(fileLocation) # read the file
 
         # Create list for returning the values
 
-        if returnType == 0:
+        if returnType == 0: # Load user settings
+            print("Loading user preferences...")
 
-            configSettings = []
+            configSettings = config["Settings"]
 
-            for section in config.sections():
-                for option, value in config.items(section):
-                    configSettings.append(value)
-        elif returnType == 1:
+        elif returnType == 1: # Load Prompts from Prompt Generator file
+            print("Loading prompts...")
 
             configSettings = {}
 
@@ -31,7 +29,7 @@ def loadSettings(fileLocation, returnType = 0):
                     currentList.append(value)
                     configSettings.update( {section : currentList} )
         
-        print("...preferences loaded!")
+        print("...loaded!")
         return configSettings
 
     except Exception as e:
@@ -39,19 +37,28 @@ def loadSettings(fileLocation, returnType = 0):
         print("File does not exist!")
         return False
 
-def createUserPreferences(fileLocation, settings):
+def createUserPreferences(fileLocation):
+    print("No user preferences found.\nCreating new preferences file.")
     configFile = configparser.ConfigParser()
 
+    # Factory Settings
     configFile["Settings"] = {
-        "stepsMax": settings[0],
-        "scaleMax": settings[1],
-        "batchMax": settings[2],
-        "defaultBatchSize" : settings[3],
-        "modelsLocation" : settings[4],
-        "defaultModel" : settings[5],
-        "maxMemory" : settings[6],
-        "creationLocation" : settings[7]
+        "stepsMax": 64,
+        "scaleMax": 20,
+        "batchMax": 4,
+        "defaultBatchSize" : 4,
+        "modelsLocation" : "models/",
+        "defaultModel" : "",
+        "creationLocation" : "creations/",
+        "creationType" : "Art",
+        "legacyVersion" : "True",
+        "saveSettings" : "True"
     }
 
     with open(fileLocation, 'w') as conf:
         configFile.write(conf)
+    
+    print("Type of variable: ")
+    print(type(configFile["Settings"]))
+
+    return configFile["Settings"]
