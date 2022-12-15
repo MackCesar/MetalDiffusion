@@ -1,28 +1,8 @@
 [Model Prompts]
 Model1 = mdjrny-v4 style
-Model2 = ski jinx
-Model3 = comic may art style
-Model4 = Arcane style
-Model5 = charliebo artstyle
-Model6 = holliemengert artstyle
-Model7 = marioalberti artstyle
-Model8 = pepelarraz artstyle
-Model9 = andreasrocha artstyle
-Model10 = jamesdaly artstyle
-Model11 = microworld render style
-Model12 = samdoesarts
-Model13 = samdoesarts style
-Model14 = SamDoesArt
-Model15 = microworld render style
-Model16 = knollingcase
-Model17 = nvinkpunk
-Model18 = woolitize
-Model19 = analog style
-Model20 = wa-vy style
-Model21 = dreamlikeart
 
 [Artists]
-Artist1 = Jakub Rozalski
+Artist1 = Michaelangelo
 Artist2 = Rembrandt
 Artist3 = Caravaggio
 Artist4 = Leonardo DaVinci
@@ -52,7 +32,4 @@ Light7 = noir lighting
 
 [Favorites]
 Fav0 = beautiful photo of an American Staffordshire Terrier in a nice house, shot on Kodak Porta 400 film with a 50mm lens and shallow depth of field
-Fav1 = mdjrny-v4 style, close up portrait of a woman in WWI uniform, destroyed cathedral, sad, armored bear, in the style of Jakub Rozalski, highly detailed, oil painting, raining
-Fav2 = mdjrny-v4 Soldiers fighting, epic wide shot, European city, steam punk, in the style of Jakub Rozalski
-Fav3 = farmers walking on a forest road, mech in the distance,  clouds in the sky, fog, highly detailed, early morning, Jakob rozalski, concept art, beautiful, landscape, digital painting
-Fav4 = mdjrny-v4 style, Cookie Monster as a king, portrait, renaissance style, Rembrandt, oil painting, chiaroscuro, highly detailed, textured, king
+Fav1 = mdjrny-v4 style, Cookie Monster as a king, portrait, renaissance style, Rembrandt, oil painting, chiaroscuro, highly detailed, textured, king
