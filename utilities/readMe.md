@@ -11,3 +11,13 @@ Currently, the script can only find .ckpt's.
 Currently, it is used to write:
 1) the art/cinema creation settings of a generation. The input text is a list of strings that are written into a file. Every index is a line of data
 2) the analysis of a .ckpt file. This was used in the development of SD2.x adoption
+
+## settingsControl.py
+**User Settings Control** is a script that reads and writes the user preferences and settings.
+
+This script contains the factory defaults for the webUI.
+
+## videoUtilities.py
+**Video Utilities** is a script that handles all things regarding video creation.
+
+Currently, the zoom out function isn't working as intended. Beware!
