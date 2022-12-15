@@ -3,19 +3,27 @@ import os
 import sys
 import random
 
-def writeToFile(path, text):
+def writeToFile(path, text, state_dict = False):
     try:
         file = open(path, "w")
 
-        for i, item in enumerate(text):
-            text[i] = str(item) + "\n"
-
+        if state_dict:
+            data = text
+            text = ""
+            i = 0
+            for key in data['state_dict'].items():
+                i = i +1
+                text = text + str(i) + " " + str(key[0]) + "\n" # Layer
+                text = text + str(key[1]) + "\n" # Value
+        if state_dict is False:
+            for i, item in enumerate(text):
+                text[i] = str(item) + "\n"
         file.writelines(text)
         file.close()
 
         return True
     except Exception as e:
-        print(e)
+        print("Error in writing file!\n",e)
         return False
 
 def readFromFile(path):
