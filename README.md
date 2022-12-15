@@ -8,9 +8,9 @@ The weights were ported from the original implementation of Stable Diffusion.
 
 ## Installation
 
-These installation instructions are geared towards use on an Intel Mac, but the program will run on almost every system. Special MacOS instructions will be labeled below with alternatives given as well.
+These installation instructions are geared towards use on an Intel Mac.
 
-**MAC ONLY:**This program is best utilized within a python virtual environment, making it independent of the python already installed on MacOS.
+This program is best utilized within a python virtual environment, making it independent of the python already installed on MacOS.
 ### Programs required
 
 1) Terminal
@@ -113,75 +113,31 @@ cd /Users/MacUser/stable-diffusion-tensorflow-IntelMetal/
 
 ## Usage
 
-### As a Web UI
+### Launching/Starting the program Basics
 
-For a user-friendly interface, use the web UI made with Gradio. With `Terminal` run this command:
+This program is run through the `dream.py` script, which is a [Gradio Web User Interface](https://gradio.app/). With `Terminal` run this command:
 
 ```bash
-python dreamWebUI.py
+python dream.py
 ```
 
-The web UI will automatically load into your preferred browser.
+The web UI will automatically load into your default browser.
+
+When you and your computer are finished creating, return to terminal and press `Control C` to end the Gradio web server. Alternatively, you can also quit `Terminal` entirely.
+
+#### Launching/Starting Overrides
+By default, the Gradio WebUI will:
+* Not create a public link
+* Launch the webUI automatically in your default browser
+
+The Gradio defaults can be overridden with command lines. For example:
+
+```bash
+python dream.py --share
+```
+This will launch the webUI and will create a public link through Gradio. This is useful for Google Colab notebooks.
 
 To finish the program, in `Terminal` type `CTRL+C` and the program will quit or quit `Terminal` entirely.
-
-### As a Python module
-
-You can use the repo as a python module in a custom script:
-
-```python
-### Import Stable Diffusion Tensorflow
-from stable_diffusion_tf.stable_diffusion import StableDiffusion
-
-### Import image creation module
-from PIL import Image
-
-### Create a class
-generator = StableDiffusion(
-    img_height=512,
-    img_width=512,
-    jit_compile=False,
-)
-
-### Use the generate function in the class to create an image. It will return an array which can be converted into an iamge
-img = generator.generate(
-    "An astronaut riding a horse",
-    num_steps=50,
-    unconditional_guidance_scale=7.5,
-    temperature=1,
-    batch_size=1,
-)
-
-# Or also include an image for image to image
-img = generator.generate(
-    "A Halloween bedroom",
-    num_steps=50,
-    unconditional_guidance_scale=7.5,
-    temperature=1,
-    batch_size=1,
-    input_image="/path/to/img.png"
-)
-
-### Convert the returned array to an actual image and save it
-Image.fromarray(img[0]).save("output.png")
-```
-
-### Using `text2image.py` in `Terminal`
-
-*text2image.py* is a pre-created python script that can be used from the command line within the virtual environment:
-
-```bash
-python text2image.py --prompt="An astronaut riding a horse"
-```
-
-The generated image will be named `output.png` on the root of the repo.
-If you want to use a different name, use the `--output` flag.
-
-```bash
-python text2image.py --prompt="An astronaut riding a horse" --output="my_image.png"
-```
-
-Check out the `text2image.py` file for more options, including image size, number of steps, etc.
 
 ## Example outputs 
 
