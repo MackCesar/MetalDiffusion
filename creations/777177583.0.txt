@@ -1,0 +1,18 @@
+A epic and beautiful rococo werewolf drinking coffee, in a burning coffee shop. ultra-detailed. anime, pixiv, uhd 8k cryengine, octane render
+
+512
+512
+7.5
+32
+777177583.0
+StableDiffusion_V1p4.ckpt
+1
+0.5
+12
+24
+48
+Positive Iteration
+0
+0
+0
+0
