@@ -96,6 +96,7 @@ class OpenCLIPEncoderLayer(keras.layers.Layer):
         residual = hidden_states
         hidden_states = self.layer_norm2(hidden_states)
 
+        # MLP Steps
         hidden_states = self.fc1(hidden_states)
         hidden_states = gelu(hidden_states)
         hidden_states = self.fc2(hidden_states)
