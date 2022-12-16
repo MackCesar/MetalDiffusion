@@ -238,19 +238,25 @@ def checkModel(selectedModel, legacy):
     print("\nEncoder Model Summary")
     model.encoder.summary()
 
-def analyzeModelWeights(model):
+def analyzeModelWeights(model, VAE, whichModel):
 
-    print("\nAnalyzing model weights for: ", model)
+    if whichModel == "VAE":
+        thePatient = VAE
+        filePath = userSettings["VAEModelsLocation"]
+    else:
+        thePatient = model
+        filePath = userSettings["modelsLocation"]
+    print("\nAnalyzing model weights for: ", thePatient)
 
     print("...analyzing...")
 
-    pytorchWeights = torch.load(modelsLocation + model, map_location = "cpu")
+    pytorchWeights = torch.load(filePath + thePatient, map_location = "cpu")
 
     print("...done!")
 
     print("Saving analysis...")
     
-    if readWriteFile.writeToFile(modelsLocation + model.replace(".ckpt","-analysis.txt"), pytorchWeights, True):
+    if readWriteFile.writeToFile(filePath + thePatient.replace(".ckpt","-analysis.txt"), pytorchWeights, True):
         print("...done!")
     
     del pytorchWeights
@@ -298,7 +304,8 @@ class dreamWorld:
         saveSettings = True,
         jitCompile = False,
         animateFPS = 12,
-        totalFrames = 24
+        totalFrames = 24,
+        VAE = "Original"
     ):
         ## Let's create an object class that we can update later
 
@@ -313,6 +320,7 @@ class dreamWorld:
         self.input_image = input_image
         self.input_image_strength = input_image_strength
         self.pytorchModel = pytorchModel
+        self.VAE = VAE
         self.batchSize = batchSize
         self.saveSettings = saveSettings
         self.jitCompile = jitCompile
@@ -354,6 +362,9 @@ class dreamWorld:
                 self.pytorchModel = userSettings["defaultModel"]
             modelLocation = userSettings["modelsLocation"] + self.pytorchModel
             model = self.pytorchModel
+        
+        if self.VAE != "Original":
+            VAELocation = userSettings["VAEModelsLocation"] + self.VAE
 
         # Create generator with StableDiffusion class
         self.generator = StableDiffusion(
@@ -362,7 +373,8 @@ class dreamWorld:
             jit_compile = self.jitCompile,
             download_weights = downloadWeights,
             pyTorchWeights = modelLocation,
-            legacy = self.legacy
+            legacy = self.legacy,
+            VAE = VAELocation
         )
         
         print(color.GREEN,color.BOLD,"\nModel ready!",color.END)
@@ -397,7 +409,8 @@ class dreamWorld:
         xTranslation = "0",
         yTranslation = "0",
         startingFrame = 0,
-        legacy = True
+        legacy = True,
+        VAE = "Original"
     ):
         
         # Update object variables that don't trigger a re-compile
@@ -417,7 +430,7 @@ class dreamWorld:
         self.legacy = legacy
 
         # Update object variables that trigger a re-compile
-        if width != self.width or height != self.height or pytorchModel != self.pytorchModel:
+        if width != self.width or height != self.height or pytorchModel != self.pytorchModel or VAE != self.VAE:
             print("\nCritical changes made for creation, compiling new model")
             print("New inputs: \n",width,height,batchSize,pytorchModel)
             print("Old inputs: \n",self.width,self.height,self.batchSize, self.pytorchModel)
@@ -425,6 +438,7 @@ class dreamWorld:
             self.width = int(width)
             self.height = int(height)
             self.pytorchModel = pytorchModel
+            self.VAE = VAE
 
             # Compile new model baesd on new parameters
             self.compileDreams()
@@ -433,6 +447,7 @@ class dreamWorld:
             self.width = int(width)
             self.height = int(height)
             self.pytorchModel = pytorchModel
+            self.VAE = VAE
 
         # Global Variables
         global model
@@ -796,10 +811,19 @@ seed = gr.Number(
 
 modelsWeights = mf.findModels(userSettings["modelsLocation"], ".ckpt")
 
+VAEWeights = mf.findModels(userSettings["VAEModelsLocation"], ".ckpt")
+VAEWeights.insert(0,"Original")
+
 listOfModels = gr.Dropdown(
             choices = modelsWeights,
             label = "Model",
             value = userSettings["defaultModel"]
+        )
+
+listOfVAEModels = gr.Dropdown(
+            choices = VAEWeights,
+            label = "VAE Options",
+            value = VAEWeights[0]
         )
 
 legacyVersion = gr.Checkbox(
@@ -937,6 +961,12 @@ checkModelButton = gr.Button("Check Model")
 
 analyzeModelWeightsButton = gr.Button("Analyze Model Weights")
 
+analyzeThisModel = gr.Dropdown(
+    choices = ["Entire Model", "VAE"],
+    value = [0],
+    label = "What kind of model to analyze?"
+)
+
 # Video Tools
 convertToVideoButton = gr.Button("Convert to video")
 
@@ -1038,14 +1068,19 @@ with gr.Blocks(
             with gr.Tab("Advanced Settings"):
 
                 with gr.Row():
+                    ## Models
                     # Model Selection
                     listOfModels.render()
 
-                    # Legacy Edition
+                    # VAE Selection
+                    listOfVAEModels.render()
+                with gr.Column():
+                    ## Mode Selection
+                    # Legacy vs Contemporary Edition
                     legacyVersion.render()
 
-                # Save settings used for creation?
-                saveSettings.render()
+                    # Save settings used for creation?
+                    saveSettings.render()
 
             with gr.Tab("Import"):
 
@@ -1134,8 +1169,12 @@ with gr.Blocks(
                 #pruneModelButton.render()
 
                 checkModelButton.render()
+                
+                with gr.Row():
+                    # Model analysis
+                    analyzeModelWeightsButton.render()
 
-                analyzeModelWeightsButton.render()
+                    analyzeThisModel.render()
 
         with gr.Column():
             # Result
@@ -1176,7 +1215,8 @@ with gr.Blocks(
             xTranslate,
             yTranslate,
             startingFrame,
-            legacyVersion
+            legacyVersion,
+            listOfVAEModels
         ],
         outputs = [result, resultVideo]
     )
@@ -1199,7 +1239,26 @@ with gr.Blocks(
     importPromptButton.click(
         fn = readWriteFile.readFromFile,
         inputs = importPromptLocation,
-        outputs = [prompt, negativePrompt, width, height, scale, steps, seed, listOfModels, batchSizeSelect, inputImageStrength, animatedFPS, videoFPS, totalFrames, seedBehavior, angle, zoom, xTranslate, yTranslate]
+        outputs = [
+            prompt,
+            negativePrompt,
+            width,
+            height,
+            scale,
+            steps,
+            seed,
+            listOfModels,
+            batchSizeSelect,
+            inputImageStrength,
+            animatedFPS,
+            videoFPS,
+            totalFrames,
+            seedBehavior,
+            angle,
+            zoom,
+            xTranslate,
+            yTranslate
+        ]
     )
 
     # When creation type is selected
@@ -1235,7 +1294,7 @@ with gr.Blocks(
 
     analyzeModelWeightsButton.click(
         fn = analyzeModelWeights,
-        inputs = listOfModels,
+        inputs = [listOfModels, listOfVAEModels, analyzeThisModel],
         outputs = None
     )
 
