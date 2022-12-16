@@ -166,9 +166,9 @@ The following outputs have been generated using this implementation:
 ![a](creations/7771775831-SD1p5.png)
 
 
-2) *Spider-Gwen Gwen-Stacy Skyscraper Pink White Pink-White Spiderman Photo-realistic 4K*
+2) ***OpenJourney***: **mdjrny-v4 style, Cookie Monster as a king, portrait, renaissance style, Rembrandt, oil painting, chiaroscuro, highly detailed, textured, king*
 
-![a](https://user-images.githubusercontent.com/1890549/190841999-689c9c38-ece4-46a0-ad85-f459ec64c5b8.png)
+![a](creations/965345875.01.png)
 
 
 3) *A vision of paradise, Unreal Engine*
