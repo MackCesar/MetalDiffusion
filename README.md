@@ -166,15 +166,18 @@ The following outputs have been generated using this implementation:
 ![a](creations/7771775831-SD1p5.png)
 
 
-2) ***OpenJourney***: **mdjrny-v4 style, Cookie Monster as a king, portrait, renaissance style, Rembrandt, oil painting, chiaroscuro, highly detailed, textured, king*
+2) ***OpenJourney***: *mdjrny-v4 style, Cookie Monster as a king, portrait, renaissance style, Rembrandt, oil painting, chiaroscuro, highly detailed, textured, king*
 
 ![a](creations/965345875.01.png)
 
 
-3) *A vision of paradise, Unreal Engine*
+3) ***Stable Diffusion 2.1***: *A vision of paradise, Unreal Engine*
 
-![a](https://user-images.githubusercontent.com/1890549/190841886-239406ea-72cb-4570-8f4c-fcd074a7ad7f.png)
+![a](creations/14804316391.png)
 
+4) ***OpenJourney***: Video example:
+
+![a](creations/videoExample.mp4)
 
 ## References
 
