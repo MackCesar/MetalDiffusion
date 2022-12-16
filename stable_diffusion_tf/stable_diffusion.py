@@ -510,6 +510,9 @@ class StableDiffusion:
                 
                 getattr(self, module_name).set_weights(module_weights)
                 print("Loaded %d pytorch weights for %s"%(len(module_weights) , module_name))
+        
+        ## Memory Clean up
+        del pytorchWeights
 
     def legacyPreparePrompt(self, prompt, batch_size):
         ## Legacy mode
@@ -539,7 +542,6 @@ class StableDiffusion:
         # Then tokenize the prompt
         startOfToken = self.tokenizer.encoder["<start_of_text>"]
         endOfToken = self.tokenizer.encoder["<end_of_text>"]
-        print("endOfToken:\n",endOfToken)
         allTokens = [[startOfToken] + self.tokenizer.encode(input) + [endOfToken] for input in inputs]
         # Create the empty tensor/numpy array to load the tokens into
         phrase = np.zeros((len(allTokens), MAX_TEXT_LEN), dtype = np.int64)
