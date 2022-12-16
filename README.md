@@ -177,7 +177,7 @@ The following outputs have been generated using this implementation:
 
 4) ***OpenJourney***: Video example:
 
-![a](creations/videoExample.mp4)
+[Video File](creations/videoExample.mp4)
 
 ## References
 
