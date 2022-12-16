@@ -149,13 +149,13 @@ Under *Advanced Settings*, select your model. Then select `Use Legacy Stable Dif
 
 What changed between the two models were:
 
-#####The Text Encoder model:
+**The Text Encoder model**
 
-SD1.4/1.5 uses OpenAI's CLIP Encoder model
-SD2.x uses the OPENClip Encoder model
+* SD1.4/1.5 uses OpenAI's CLIP Encoder model
+* SD2.x uses the OPENClip Encoder model
 
-#####The Unet architecture:
-The Unet is located inside the diffusion model, and what changed between was the architecture of the Unet.
+**The Unet architecture**
+* The Unet is located inside the diffusion model, and what changed was the architecture of the Unet.
 
 ## Example outputs 
 
