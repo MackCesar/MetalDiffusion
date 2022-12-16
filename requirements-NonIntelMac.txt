@@ -12,3 +12,4 @@ psutil
 torch
 opencv-python
 numexpr
+pytorch-lightning
