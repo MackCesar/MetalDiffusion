@@ -161,9 +161,9 @@ The Unet is located inside the diffusion model, and what changed between was the
 
 The following outputs have been generated using this implementation:
 
-1) *A epic and beautiful rococo werewolf drinking coffee, in a burning coffee shop. ultra-detailed. anime, pixiv, uhd 8k cryengine, octane render*
+1) *A epic and beautiful rococo werewolf drinking coffee, in a burning coffee shop. ultra-detailed. anime, pixiv, uhd 8k cryengine, octane render* Stable Diffusion 1.5
 
-![a](https://user-images.githubusercontent.com/1890549/190841598-3d0b9bd1-d679-4c8d-bd5e-b1e24397b5c8.png)
+![a](creations/7771775831-SD1p5.png)
 
 
 2) *Spider-Gwen Gwen-Stacy Skyscraper Pink White Pink-White Spiderman Photo-realistic 4K*
