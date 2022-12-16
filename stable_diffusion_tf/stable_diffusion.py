@@ -74,7 +74,8 @@ class StableDiffusion:
         jit_compile = False,
         download_weights = True,
         pyTorchWeights = None,
-        legacy = True
+        legacy = True,
+        VAE = "Original"
     ):
         # Set image dimensions
         self.img_height = img_height
@@ -111,9 +112,25 @@ class StableDiffusion:
         self.encoder = encoder
 
         # Load pytorch weights if pytorch weights were given
-        # must be done after compiling models
+        # must be done after compiling models.
+        if VAE != "Original":
+            self.load_weights_from_pytorch_ckpt(
+                VAE,
+                legacy,
+                ['decoder', 'encoder'], # Models to load
+                True
+            )
+
         if pyTorchWeights is None:
-            self.load_weights_from_pytorch_ckpt(self.pyTorchWeights, legacy)
+            if VAE == "Original":
+                modules = ['text_encoder', 'diffusion_model', 'decoder', 'encoder' ]
+            else:
+                modules = ['text_encoder', 'diffusion_model']
+            self.load_weights_from_pytorch_ckpt(
+                self.pyTorchWeights,
+                legacy,
+                modules # Models to load
+            )
 
         # Just in time compilation
         if jit_compile:
@@ -414,40 +431,49 @@ class StableDiffusion:
         x_prev = math.sqrt(a_prev) * pred_x0 + dir_xt
         return x_prev, pred_x0
     
-    # Load pytorch weights as models
+    # Load pytorch weights for the models.
+    # Can only be done AFTER creating the models
     def load_weights_from_pytorch_ckpt(
         self,
         pytorch_ckpt_path,
-        legacy = True
+        legacy = True,
+        moduleName = ['text_encoder', 'diffusion_model', 'decoder', 'encoder' ],
+        VAEoverride = False
     ):
         print("\nLoading pytorch checkpoint " + pytorch_ckpt_path)
         pytorchWeights = torch.load(pytorch_ckpt_path, map_location = "cpu")
         if legacy is True:
             ## Legacy Mode
             print("...loading pytroch weights in legacy mode...")
-            for module_name in ['text_encoder_legacy', 'diffusion_model', 'decoder', 'encoder' ]:
+            for module in moduleName:
                 module_weights = []
-                for i , (key , perm ) in enumerate(PYTORCH_CKPT_MAPPING[module_name]):
+                if module == "text_encoder":
+                    module = "text_encoder"
+                for i , (key , perm ) in enumerate(PYTORCH_CKPT_MAPPING[module]):
+                    if VAEoverride is True:
+                        key = key.replace("first_stage_model.","")
                     weight = pytorchWeights['state_dict'][key].numpy()
                     if perm is not None:
                         weight = np.transpose(weight , perm )
                     module_weights.append(weight)
-                if module_name == "text_encoder_legacy":
-                    module_name = "text_encoder"
-                getattr(self, module_name).set_weights(module_weights)
-                print("Loaded %d pytorch weights for %s"%(len(module_weights) , module_name))
+                if module == "text_encoder_legacy":
+                    module = "text_encoder"
+                getattr(self, module).set_weights(module_weights)
+                print("Loaded %d pytorch weights for %s"%(len(module_weights) , module))
         else:
             ## Contemporary Mode
             print("...loading pytorch weights in contemporary mode...")
-            for module_name in ['text_encoder', 'diffusion_model', 'decoder', 'encoder' ]:
+            for module in moduleName:
                 module_weights = []
                 in_projWeightConversion = []
                 in_projBiasConversion = []
-                for i , (key , perm ) in enumerate(PYTORCH_CKPT_MAPPING[module_name]):
+                for i , (key , perm ) in enumerate(PYTORCH_CKPT_MAPPING[module]):
                     if "in_proj" not in key:
+                        if VAEoverride is True:
+                            key = key.replace("first_stage_model.","")
                         weight = pytorchWeights['state_dict'][key].numpy()
 
-                        if module_name == "diffusion_model":
+                        if module == "diffusion_model":
                             if "proj_in.weight" in key or "proj_out.weight" in key:
                                 #print(i+1," Overriding premuation from constants:\n",key)
                                 # This is so the constants.py "diffusion_model" dictionary keeps its legacy state
@@ -457,7 +483,7 @@ class StableDiffusion:
                             weight = np.transpose(weight , perm )
                         module_weights.append(weight)                          
                     else:
-                        if module_name == "text_encoder":
+                        if module == "text_encoder":
                             # "in_proj" layer of SD2.x is a matrix multiplcation of the query, key, and value layers of SD1.4/5
                             # We will slice this layer into the the three vectors
                             if "weight" in key:
@@ -506,10 +532,10 @@ class StableDiffusion:
                                 module_weights.append(in_projWeightConversion[2])
                                 module_weights.append(in_projBiasConversion[2])
 
-                print("Loading weights for ", module_name)
+                print("Loading weights for ", module)
                 
-                getattr(self, module_name).set_weights(module_weights)
-                print("Loaded %d pytorch weights for %s"%(len(module_weights) , module_name))
+                getattr(self, module).set_weights(module_weights)
+                print("Loaded %d pytorch weights for %s"%(len(module_weights) , module))
         
         ## Memory Clean up
         del pytorchWeights
