@@ -52,7 +52,10 @@ def createUserPreferences(fileLocation):
         "creationLocation" : "creations/",
         "creationType" : "Art",
         "legacyVersion" : "True",
-        "saveSettings" : "True"
+        "saveSettings" : "True",
+        "VAEModelsLocation" : "models/VAE/",
+        "EmbeddingsLocation" : "models/embeddings/",
+        "mixedPrecision" : "False"
     }
 
     with open(fileLocation, 'w') as conf:
