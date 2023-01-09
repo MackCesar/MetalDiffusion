@@ -9,7 +9,7 @@ import sys
 def findModels(path, type, getHash = False):
     print("\nSearching for models and weights...")
     directory = os.listdir(path.rstrip()) # local variable for an list of the files in the directory
-    currentList = ["Stable Diffusion 1.4"] # local variable list for found files with a default already added
+    currentList = [] # local variable list for found files with a default already added
     for file in directory:
         if file.endswith(type):
             # Prints only type of file present in the folder
