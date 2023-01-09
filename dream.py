@@ -365,6 +365,8 @@ class dreamWorld:
         
         if self.VAE != "Original":
             VAELocation = userSettings["VAEModelsLocation"] + self.VAE
+        else:
+            VAELocation = self.VAE
 
         # Create generator with StableDiffusion class
         self.generator = StableDiffusion(
