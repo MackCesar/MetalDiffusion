@@ -448,7 +448,7 @@ class StableDiffusion:
             for module in moduleName:
                 module_weights = []
                 if module == "text_encoder":
-                    module = "text_encoder"
+                    module = "text_encoder_legacy"
                 for i , (key , perm ) in enumerate(PYTORCH_CKPT_MAPPING[module]):
                     if VAEoverride is True:
                         key = key.replace("first_stage_model.","")
