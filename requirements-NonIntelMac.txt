@@ -6,7 +6,7 @@ tensorflow-addons==0.17.1
 tensorflow-estimator
 ftfy==6.1.1
 regex==2022.9.13
-gradio
+gradio==3.13.0
 scikit-image
 psutil
 torch
