@@ -1,0 +1,18 @@
+Grainy portrait of a space traveller, at night in a busy spaceport, highly detailed, cinematic lighting, moody, neon lights, exterior, stars in the sky, <ghst-3000>
+
+512
+768
+7.5
+25
+453000974.0
+DreamShaper
+1
+0.5
+12
+24
+48
+Positive Iteration
+0
+0
+0
+0
