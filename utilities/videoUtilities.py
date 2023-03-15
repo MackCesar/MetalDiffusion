@@ -3,19 +3,23 @@ import pandas as pd
 import cv2
 import subprocess
 import re
-from tensorflow import keras
 from skimage.exposure import cumulative_distribution
+import random
 
 ### Functions
 
 def nextSeed(seedBehavior, seed):
-    if seedBehavior == 'iter':
+    if seedBehavior == 'Positive Iteration':
         seed = seed + 1
-    elif seedBehavior == 'fix':
-        pass
+    elif seedBehavior == 'Negative Iteration':
+        seed = seed -1
+    elif seedBehavior == "Random Iteration":
+        seed = random.randint(0, 2 ** 31)
+    
+    return seed
 
 def animateFrame2DWarp(
-    prev_img_cv2,
+    prev_img,
     angle,
     zoom,
     xTranslation,
@@ -23,6 +27,15 @@ def animateFrame2DWarp(
     width,
     height
 ):
+
+    # Convert image to CV2
+    prev_img_cv2 = cv2.cvtColor(np.array(prev_img), cv2.COLOR_RGB2BGR)
+
+    # zoom limits
+    if zoom < 0.9:
+        zoom = 0.9
+    if zoom > 1.1:
+        zoom = 1.1
 
     center = (width // 2, height // 2)
     trans_mat = np.float32([[1, 0, xTranslation], [0, 1, yTranslation]])
@@ -35,7 +48,7 @@ def animateFrame2DWarp(
         prev_img_cv2,
         xform,
         (prev_img_cv2.shape[1], prev_img_cv2.shape[0]),
-        cv2.BORDER_REPLICATE
+        borderMode = cv2.BORDER_REFLECT
     )
 
 def constructFFmpegVideoCmd(animatedFPS, videoFPS, frames_path, resultPath):
@@ -273,7 +286,7 @@ def construct_ffmpeg_video_cmd(FPS, framesPath, resultPath):
         "-q:v 0", "-q:a 0"
     ]
 
-    # ffmpeg -r 12 -f image2 -i content/scytheIntro003/frame_%05d.png -crf 24 -c:v libx264 -pix_fmt yuv420p content/scytheIntro003.mp4 -q:v 0 -q:a 0
+    # ffmpeg -r 12 -f image2 -i content/scytheIndustry001/frame_%05d.png -crf 24 -c:v libx264 -pix_fmt yuv420p content/scytheIndustry001.mp4 -q:v 0 -q:a 0
 
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()

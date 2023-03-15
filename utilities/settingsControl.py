@@ -43,10 +43,10 @@ def createUserPreferences(fileLocation):
 
     # Factory Settings
     configFile["Settings"] = {
-        "stepsMax": 64,
+        "stepsMax": 100,
         "scaleMax": 20,
         "batchMax": 4,
-        "defaultBatchSize" : 4,
+        "defaultBatchSize" : 1,
         "modelsLocation" : "models/",
         "defaultModel" : "",
         "creationLocation" : "creations/",

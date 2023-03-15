@@ -3,21 +3,37 @@ import os
 import sys
 import random
 
-def writeToFile(path, text, state_dict = False):
+def writeToFile(path, text, dictionaryToFind = None):
     try:
         file = open(path, "w")
 
-        if state_dict:
+        if dictionaryToFind is not None and dictionaryToFind != "All":
             data = text
             text = ""
             i = 0
-            for key in data['state_dict'].items():
+            for key in data[dictionaryToFind].items():
                 i = i +1
                 text = text + str(i) + " " + str(key[0]) + "\n" # Layer
                 text = text + str(key[1]) + "\n" # Value
-        if state_dict is False:
+        elif dictionaryToFind is None:
             for i, item in enumerate(text):
                 text[i] = str(item) + "\n"
+        elif dictionaryToFind == "All":
+            data = text
+            text = ""
+            for key, value in data.items():
+                text = text + str(key) + "\n"
+        elif dictionaryToFind == "embedding":
+            data = text
+            text = ""
+            for key, value in data.items():
+                text = text + str(value) + ":" + str(value) + "\n"
+        else:
+            data = text
+            text = ""
+            for key, value in data.items():
+                text = text + str(key) + " " + str(value) + "\n"
+
         file.writelines(text)
         file.close()
 
