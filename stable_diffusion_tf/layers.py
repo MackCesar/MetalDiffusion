@@ -43,9 +43,17 @@ def quick_gelu(x):
     return x * tf.sigmoid(x * 1.702)
 
 
-def apply_seq(x, layers):
+"""def apply_seq(x, layers):
     for l in layers:
         x = l(x)
+    return x"""
+
+def apply_seq(x, seq_layer):
+    if isinstance(seq_layer, tf.keras.Sequential):
+        x = seq_layer(x)
+    else:
+        for l in seq_layer:
+            x = l(x)
     return x
 
 

@@ -3,27 +3,28 @@ from tensorflow import keras
 import tensorflow_addons as tfa
 import numpy as np
 
-from .layers import quick_gelu, gelu
+from .layers import quick_gelu
 
 # Step 1
 # Create and return the CLIP Embeddings
-class OpenCLIPTextTransformer(keras.models.Model):
+class CLIPTextTransformer(keras.models.Model):
     def __init__(
-        self,
-        maxLength = 77,
-        vocabularySize = 49408
+            self,
+            maxLength = 77,
+            vocabularySize = 49408
     ):
         super().__init__()
 
         # Create embeddings -> Step 2
-        self.embeddings = OpenCLIPTextEmbeddings(maxLength = maxLength, vocabularySize = vocabularySize)
+        self.embeddings = CLIPTextEmbeddings(maxLength = maxLength, vocabularySize = vocabularySize)
 
         # Create encoder -> Step 3
-        self.encoder = OpenCLIPEncoder()
+        self.encoder = CLIPEncoder()
 
         self.final_layer_norm = keras.layers.LayerNormalization(epsilon = 1e-5, name = "FinalLayerNormalization")
         self.causal_attention_mask = tf.constant(
-            np.triu(np.ones((1, 1, 77, 77), dtype = "float32") * -np.inf, k = 1)
+            np.triu(np.ones((1, 1, 77, 77), dtype = "float32") * -np.inf, k = 1),
+            name = "CausalAttentionMask"
         )
 
     def call(self, inputs):
@@ -34,19 +35,18 @@ class OpenCLIPTextTransformer(keras.models.Model):
 
 # Step 2
 # Create and return word and position embeddings
-class OpenCLIPTextEmbeddings(keras.layers.Layer):
+
+class CLIPTextEmbeddings(keras.layers.Layer):
     def __init__(
-        self,
-        maxLength = 77,
-        vocabularySize = 49408,
-        embeddingSize = 1024
-    ):
+            self,
+            maxLength = 77,
+            vocabularySize = 49408,
+            embeddingSize = 768
+        ):
         super().__init__()
-        # Token Embedding Layer - Representing a sequence of tokens (words)
         self.token_embedding_layer = keras.layers.Embedding(
             vocabularySize, embeddingSize, name = "token_embedding"
         )
-        # Position Embedding layer - Where is the word in the sentence? What does it mean in the context of the sentence?
         self.position_embedding_layer = keras.layers.Embedding(
             maxLength, embeddingSize, name = "position_embedding"
         )
@@ -59,10 +59,10 @@ class OpenCLIPTextEmbeddings(keras.layers.Layer):
 
 # Step 3
 # Create and return the hidden states (aka hidden size)
-class OpenCLIPEncoder(keras.layers.Layer):
+class CLIPEncoder(keras.layers.Layer):
     def __init__(self):
         super().__init__()
-        self.layers = [OpenCLIPEncoderLayer() for i in range(24)]
+        self.layers = [CLIPEncoderLayer() for i in range(12)]
 
     def call(self, inputs):
         [hidden_states, causal_attention_mask] = inputs
@@ -72,18 +72,18 @@ class OpenCLIPEncoder(keras.layers.Layer):
 
 # Step 4 (also creatd in step 3)
 # Create the layers
-class OpenCLIPEncoderLayer(keras.layers.Layer):
+class CLIPEncoderLayer(keras.layers.Layer):
     def __init__(
-        self,
-        intermediateSize = 4096,
-        embeddingSize = 1024
-    ):
+            self,
+            intermediateSize = 3072,
+            embeddingSize = 768
+        ):
         super().__init__()
-        self.layer_norm1 = keras.layers.LayerNormalization(epsilon = 1e-5, name = "LayerNormalization01") # Layer Normalization 1
-        self.self_attn = OpenCLIPAttention() # Attention Layers
-        self.layer_norm2 = keras.layers.LayerNormalization(epsilon = 1e-5, name = "LayerNormalization02") # Layer Normalization 2
-        self.fc1 = keras.layers.Dense(intermediateSize, name = "FC1") # MLP layer?
-        self.fc2 = keras.layers.Dense(embeddingSize, name = "FC2") # ???
+        self.layer_norm1 = keras.layers.LayerNormalization(epsilon = 1e-5, name = "LayerNormalization001")
+        self.self_attn = CLIPAttention()
+        self.layer_norm2 = keras.layers.LayerNormalization(epsilon = 1e-5, name = "LayerNormalization002")
+        self.fc1 = keras.layers.Dense(intermediateSize, name = "FC1")
+        self.fc2 = keras.layers.Dense(embeddingSize, name = "FC2")
 
     def call(self, inputs):
         hidden_states, causal_attention_mask = inputs
@@ -96,27 +96,25 @@ class OpenCLIPEncoderLayer(keras.layers.Layer):
         residual = hidden_states
         hidden_states = self.layer_norm2(hidden_states)
 
-        # MLP Steps
         hidden_states = self.fc1(hidden_states)
-        hidden_states = gelu(hidden_states)
+        hidden_states = quick_gelu(hidden_states)
         hidden_states = self.fc2(hidden_states)
 
         return residual + hidden_states
 
-class OpenCLIPAttention(keras.layers.Layer):
+class CLIPAttention(keras.layers.Layer):
     def __init__(self):
         super().__init__()
-        self.embed_dim = 1024
-        self.num_heads = 16
+        self.embed_dim = 768
+        self.num_heads = 12
         self.head_dim = self.embed_dim // self.num_heads
         self.scale = self.head_dim**-0.5
-        self.q_proj = keras.layers.Dense(self.embed_dim, name = "QueryState") # Query states, the given word
-        self.k_proj = keras.layers.Dense(self.embed_dim, name = "KeyState") # Key states, all other words
-        self.v_proj = keras.layers.Dense(self.embed_dim, name = "ValueState") # Value states, the sentence
-        self.out_proj = keras.layers.Dense(self.embed_dim, name = "OutProjection") # Out Projection?
+        self.q_proj = keras.layers.Dense(self.embed_dim, name = "QueryState")
+        self.k_proj = keras.layers.Dense(self.embed_dim, name = "KeyState")
+        self.v_proj = keras.layers.Dense(self.embed_dim, name = "ValueState")
+        self.out_proj = keras.layers.Dense(self.embed_dim, name = "OutProjection")
 
     def _shape(self, tensor, seq_len: int, bsz: int):
-        # Keys
         a = tf.reshape(tensor, (bsz, seq_len, self.num_heads, self.head_dim))
         return keras.layers.Permute((2, 1, 3))(a)  # bs , n_head , seq_len , head_dim
 
