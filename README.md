@@ -179,7 +179,7 @@ The following outputs have been generated using this implementation:
 
 [Video File](creations/videoExample.mp4)
 
-5) ***DreamShaper*** with <ghst-3000> text embedding:
+5) ***DreamShaper*** with <ghst-3000> text embedding: *Grainy portrait of a space traveller, at night in a busy spaceport, highly detailed, cinematic lighting, moody, neon lights, exterior, stars in the sky, ghst-3000*
 
 ![a](creations/4530009741.png)
 
