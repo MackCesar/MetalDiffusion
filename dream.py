@@ -953,7 +953,8 @@ height = gr.Slider(
     minimum = 128,
     maximum = 1152,
     value = 512,
-    step = 128
+    step = 128,
+    label = "Height"
 )
 
 # Width
@@ -961,7 +962,8 @@ width = gr.Slider(
     minimum = 128,
     maximum = 1152,
     value = 512,
-    step = 128
+    step = 128,
+    label = "Width"
 )
 
 # Batch Size
