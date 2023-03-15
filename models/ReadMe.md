@@ -38,4 +38,4 @@ Currently, as of 3/14/23, the program can only load VAE's as ".ckpt"
 
 Place Textual Inversion weights, aka Text Embeddings, here.
 
-Currently, the program accepts weights in the ".pt" and ".bin" formats.
+Currently, as of 3/14/23, the program accepts weights in the ".pt" and ".bin" formats.
