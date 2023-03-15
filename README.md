@@ -16,7 +16,7 @@ This program is best utilized within a python virtual environment, making it ind
 1) Terminal
 2) Homebrew
 3) Pyenv
-4) Python
+4) Python 3.9
 5) Git
 
 `Terminal` will be used for all of the following commands:
@@ -178,6 +178,10 @@ The following outputs have been generated using this implementation:
 4) ***OpenJourney***: Video example:
 
 [Video File](creations/videoExample.mp4)
+
+5) ***DreamShaper*** with <ghst-3000> text embedding:
+
+![a](creations/4530009741.png)
 
 ## References
 
