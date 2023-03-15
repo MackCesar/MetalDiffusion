@@ -949,11 +949,6 @@ legacyVersion = gr.Checkbox(
 )
 
 # Height
-"""height = gr.Dropdown(
-    choices = [128,256,384,512,640,768,896,1024],
-    value = 512,
-    label = "Height"
-)"""
 height = gr.Slider(
     minimum = 128,
     maximum = 1152,
@@ -962,11 +957,6 @@ height = gr.Slider(
 )
 
 # Width
-"""width = gr.Dropdown(
-    choices = [128,256,384,512,768,896,1024],
-    value = 512,
-    label = "Width"
-)"""
 width = gr.Slider(
     minimum = 128,
     maximum = 1152,
@@ -1089,11 +1079,18 @@ importPromptLocation = gr.File(
 
 importPromptButton = gr.Button("Import prompt")
 
-listOfEmbeddings = gr.Dropdown(
-            choices = embeddingNames,
-            label = "Text Embeddings",
-            value = embeddingNames[0]
-        )
+if len(embeddingNames) > 0:
+    listOfEmbeddings = gr.Dropdown(
+                choices = embeddingNames,
+                label = "Text Embeddings",
+                value = embeddingNames[0]
+            )
+else:
+    listOfEmbeddings = gr.Dropdown(
+                choices = None,
+                label = "Text Embeddings",
+                value = None
+            )
 
 ## Video
 
