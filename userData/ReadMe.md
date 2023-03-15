@@ -9,3 +9,7 @@ This is the text file the program will read for pre-written prompts. To add a ca
 Style1 = A style you want to include on the prompt
 
 Style2 = A different style you want to use
+
+### Maximum Amount of Categories
+
+Currently, the prompt generator can only store 5 categories.
