@@ -1,4 +1,4 @@
-### VAE Models
+# VAE Models
 
 Place your VAE .ckpt files here.
 
