@@ -1,9 +1,11 @@
 # Utilities
 
 ## modelFinder.py
-**Model Finder** is a script that locates the models, .ckpt's, and .h5's for the program.
+**Model Finder** is a script that locates the weights for models:
 
-Currently, the script can only find .ckpt's.
+1) VAE - .ckpt
+2) Diffusion - .ckpt, .h5 (as a folder)
+3) Text Embeddings/Inversion - .pt, .bin
 
 ## readWriteFile.py
 **Read and Write to File** is a script that writes data into .txt files.
