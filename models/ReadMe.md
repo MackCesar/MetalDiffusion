@@ -27,3 +27,15 @@ The benefits of using a ".h5" format are speed; TensorFlow Keras can load ".h5" 
 ## Pytorch ".ckpt"
 
 The program searches the models folder for files that end in ".ckpt".
+
+## "VAE/" Folder
+
+Place VAE ".ckpt"s here.
+
+Currently, as of 3/14/23, the program can only load VAE's as ".ckpt"
+
+## "embeddings/" Folder
+
+Place Textual Inversion weights, aka Text Embeddings, here.
+
+Currently, the program accepts weights in the ".pt" and ".bin" formats.
