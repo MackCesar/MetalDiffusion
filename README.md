@@ -99,14 +99,19 @@ cd /Users/MacUser/stable-diffusion-tensorflow-IntelMetal/
     ```bash
     source venv/bin/activate
     ```
-
 3) Install dependencies using the `requirements.txt` file:
+
+    ```bash
+    pip install pip --upgrade --no-cache-dir
+    ```
+
+4) Install dependencies using the `requirements.txt` file:
 
     ```bash
     pip install -r requirements.txt --no-cache-dir
     ```
-
-4) When finished using Stable Diffusion, deactivate the virtual environment:
+    
+5) When finished using Stable Diffusion, deactivate the virtual environment:
     
     ```bash
     deactivate
