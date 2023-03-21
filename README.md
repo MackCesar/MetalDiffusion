@@ -24,7 +24,7 @@ This program is best utilized within a python virtual environment, making it ind
 
 ### Install Homebrew, if not already installed
 
-`Homebrew` is a fundamental tool for Mac and is required for this installion process.
+`Homebrew` is a fundamental tool for Mac and is required for this installation process.
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
