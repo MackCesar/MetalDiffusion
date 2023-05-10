@@ -9,14 +9,19 @@ import random
 import argparse
 import time
 
+### Memory Management
+import gc
+
 print("\n...system modules loaded...")
 
 ### Math modules
 
+import numpy as np
+
 ### Device modules
 
 ### Import Stable Diffusion module, Tensorflow version
-from stable_diffusion_tf.stable_diffusion import StableDiffusion
+from stableDiffusionTensorFlow.stableDiffusion import StableDiffusion
 print("...Stable Diffusion module loaded...")
 import tensorflow as tf
 
@@ -25,6 +30,9 @@ print("...TensorFlow module loaded...")
 ### Import PyTorch for converting pytorch models to tensorflow
 
 import torch as torch
+
+### Computer Vision
+import cv2
 
 ### Image saving after generation modules
 from PIL import Image
@@ -44,6 +52,7 @@ import utilities.readWriteFile as readWriteFile
 import utilities.videoUtilities as videoUtil
 import utilities.tensorFlowUtilities as tensorFlowUtilities
 from utilities.consoleUtilities import color
+import utilities.controlNetUtilities as controlNetUtilities
 
 print("...all modules loaded!")
 
@@ -152,18 +161,6 @@ def analyzeModelWeights(model, VAE, textEmbeddings, whichModel):
 
     pytorchWeights = torch.load(filePath + thePatient, map_location = "cpu")
 
-    """for key, value in pytorchWeights.items():
-            valueCheck = str(value)
-            if "tensor" in valueCheck:
-                print(str(key))
-                for token, vector in value.items():
-                    print(vector)
-                    print(vector.detach().numpy())
-                print(value.numpy())
-                pytorchWeights.append(str(key))
-                pytorchWeights.append(value.numpy())
-
-    print(pytorchWeights)"""
     print("...done!")
 
     print("Saving analysis...")
@@ -278,7 +275,7 @@ def saveModel(
     type = ".h5"
 
     if dreamer.pytorchModel is None:
-        print(color.WARNING,"\nNo Stable Diffusion model compiled!\nThere must be a compiled model to save.\nCompiling now...",color.END)
+        print(color.WARNING,"\nNo Stable Diffusion model compiled! There must be a compiled model to save.\nCompiling now...",color.END)
         if pytorchModel is None:
             if userSettings["defaultModel"] != "":
                 dreamer.pytorchModel = userSettings["defaultModel"]
@@ -289,9 +286,10 @@ def saveModel(
         dreamer.legacy = legacyMode
 
     # Have we compiled any models already?
-    if dreamer.generator is None or dreamer.generator.textEmbeddings is not None:
+    if dreamer.generator is None or dreamer.generator.textEmbeddings is not None or dreamer.pytorchModel != pytorchModel:
+        dreamer.pytorchModel = pytorchModel
         print("Compiling models without Text Embeddings")
-        dreamer.compileDreams(embeddingChoices = False)
+        dreamer.compileDreams(embeddingChoices = None)
     
     # Load/create folder to save frames in
     path = f"models/{name}"
@@ -400,38 +398,58 @@ class dreamWorld:
         self.sampleMethod = None
         self.optimizerMethod = "nadam"
 
+        # ControlNet
+        self.controlNetWeights = None
+        self.controlNetProcess = None
+        self.controlNetInput = None
+        self.controlNetStrength = 1
+        self.controlNetCache = False
+
         ## Object variable corrections
         # Set seed if not given
         if self.seed is None or 0:
             self.seed = random.randint(0, 2 ** 31)
 
-    def compileDreams(self, embeddingChoices = None):
+    def compileDreams(
+            self,
+            embeddingChoices = None,
+            useControlNet = False
+        ):
 
         # Time Keeping
         start = time.perf_counter()
 
         global model
         global userSettings
+        global ControlNetGradio
 
-        print(color.BLUE, color.BOLD,"\nStarting Stable Diffusion with Tensor flow and Apple Metal\n",color.END)
+        print(color.BLUE, color.BOLD,"\nStarting Stable Diffusion with Tensor flow and Apple Metal",color.END)
+
+        ## Memory Management
+        # del self.generator
+        gc.collect()
         
         ## Object variable corrections
         # Set seed if not given
         if self.seed is None or 0:
             self.seed = random.randint(0, 2 ** 31)
         
-        # Are we using a pytroch model? If downloadWeights is false, then yes we are!
+        ### Main Model Weights ###
+        ## Expecting weights for TextEncoder, Diffusion Model, Encoder, and Decoder
         if self.pytorchModel != "Stable Diffusion 1.4":
             if self.pytorchModel is None:
                 self.pytorchModel = userSettings["defaultModel"]
             modelLocation = userSettings["modelsLocation"] + self.pytorchModel
-            model = self.pytorchModel
+            # model = self.pytorchModel
         
+        ### VAE Weights
+        ## Will replace Encoder and Decoder weights
         if self.VAE != "Original":
             VAELocation = userSettings["VAEModelsLocation"] + self.VAE
         else:
             VAELocation = "Original"
         
+        ### Text Embedding Weights ###
         if embeddingChoices is not None:
             textEmbedding = []
             # print("Embedding Choices:",embeddingChoices)
@@ -443,7 +461,7 @@ class dreamWorld:
                         print("Found <"+choice+"> as",embedding)
                         textEmbedding.append(embedding)
             if len(textEmbedding) == 0:
-                print("\nFound no text embeddings")
+                # print("Found no text embeddings")
                 textEmbedding = None
             else:
                 textEmbedding.insert(0,self.textEmbedding[0])
@@ -451,16 +469,28 @@ class dreamWorld:
         else:
             textEmbedding = None
 
+        ### ControlNet Weights ###
+        if useControlNet is True:
+            if self.controlNetWeights is not None:
+                controlNetWeights = userSettings["ControlNetsLocation"] + self.controlNetWeights
+            else:
+                useControlNet = False
+                controlNetWeights = None
+        else:
+            controlNetWeights = None
+            useControlNet = False
+
         # Create generator with StableDiffusion class
         self.generator = StableDiffusion(
             imageHeight = int(self.height),
             imageWidth = int(self.width),
             jit_compile = self.jitCompile,
-            pyTorchWeights = modelLocation,
+            weights = modelLocation,
             legacy = self.legacy,
             VAE = VAELocation,
+            mixedPrecision = self.mixedPrecision,
             textEmbeddings = textEmbedding,
-            mixedPrecision = self.mixedPrecision
+            controlNet = [useControlNet, controlNetWeights]
         )
         
         print(color.GREEN,color.BOLD,"\nModels ready!",color.END)
@@ -501,11 +531,23 @@ class dreamWorld:
         mixedPrecision = True,
         sampleMethod = None,
         optimizerMethod = "nadam",
-        deviceOption = '/gpu:0'
+        deviceOption = '/gpu:0',
+        useControlNet = False,
+        controlNetWeights = None,
+        controlNetDoPreProcess = True,
+        controlNetProcess = None,
+        controlNetInput = None,
+        controlNetStrength = 1,
+        controlNetCache = False,
+        vPrediction = False,
+        reuseInputImage = False,
+        reuseControlNetInput = False
     ):
         
         # Import global variables
         global deviceChoice
+        global ControlNetGradio
+        global userSettings
 
         # Update object variables that don't trigger a re-compile
         self.prompt = prompt
@@ -545,33 +587,109 @@ class dreamWorld:
                 elif "GPU" in device['TensorFlow'].name:
                     print(color.CYAN,"\nUsing GPU to render:\n",device['name'],color.END)
                     selectedDevice = "/GPU:" + selectedDevice
+        
+        # Text Embeddings
+        if len(embeddingChoices) ==  0:
+            # No given embeddings means ignoring text embeddings
+            embeddingChoices = None
+        
+        # ControlNet
+        if useControlNet is False:
+            controlNetWeights = None
+            controlNetProcess = None
+            controlNetInput = None
+            controlNetCache = None
 
         with tf.device(selectedDevice):
 
-            # Update object variables that trigger a re-compile
-            if width != self.width or height != self.height or pytorchModel != self.pytorchModel or VAE != self.VAE or embeddingChoices != self.embeddingChoices:
+            # Critical Changes that require a re-compile
+            if width != self.width or height != self.height or embeddingChoices != self.embeddingChoices or controlNetWeights != self.controlNetWeights:
                 print(color.WARNING,"\nCritical changes made for creation, compiling new model",color.END)
-                print("New inputs: \n","Width:",width,"Height:",height,"Batch Size:",batchSize,"Model:",pytorchModel,"\nEmbeddings:",embeddingChoices)
-                print("Old inputs: \n","Width:",self.width,"Height:",self.height,"Batch Size:",self.batchSize,"Model:",self.pytorchModel,"\nEmbeddings:",self.embeddingChoices)
-                # Load all of the re-compile variables
+                print("\nNew inputs: \n","Width:",width,"Height:",height,"Batch Size:",batchSize,"\n  Embeddings:",embeddingChoices,"\n   ControlNet:",controlNetWeights)
+                print("\nOld inputs: \n","Width:",self.width,"Height:",self.height,"Batch Size:",self.batchSize,"\n  Embeddings:",self.embeddingChoices,"\n   ControlNet:",self.controlNetWeights)
+                # Basic Variables
                 self.width = int(width)
                 self.height = int(height)
                 self.pytorchModel = pytorchModel
                 self.VAE = VAE
+                
+                ## Text Embeddings
                 self.embeddingChoices = embeddingChoices
 
+                ### ControlNet
+                self.controlNetWeights = controlNetWeights
+
                 # Compile new model baesd on new parameters
-                self.compileDreams(embeddingChoices = embeddingChoices)
+                self.compileDreams(embeddingChoices = embeddingChoices, useControlNet = useControlNet)
             else:
-                # Load all of the re-compile variables, but nothing has changed
+                # Basic Variables
                 self.width = int(width)
                 self.height = int(height)
+                # self.pytorchModel = pytorchModel
+                # self.VAE = VAE
+
+                ## Text Embeddings
+                self.embeddingChoices = embeddingChoices
+
+                ### ControlNet
+                self.controlNetWeights = controlNetWeights
+            
+            # Regular Changes that do not require re-compile
+
+            if pytorchModel != self.pytorchModel:
+                tf.print(color.BLUE)
+                tf.print("New model weights selected!\nApplying weights from:\n",pytorchModel,color.END)
+
+                # Main Model
+                self.pytorchModel = pytorchModel
+                modelLocation = userSettings["modelsLocation"] + self.pytorchModel
+
+                # VAE
+                self.VAE = VAE
+                if self.VAE != "Original":
+                    VAELocation = userSettings["VAEModelsLocation"] + self.VAE
+                else:
+                    VAELocation = "Original"
+                
+                # Update weights
+                self.generator.setWeights(modelLocation, VAELocation)
+            else:
+                tf.print(color.BLUE)
+                tf.print("Using model weights:\n",pytorchModel,color.END)
                 self.pytorchModel = pytorchModel
                 self.VAE = VAE
 
-            if optimizerMethod is not self.optimizerMethod and self.generator is not None:
-                self.generator.compileModels(optimizerMethod, True)
+            if optimizerMethod != self.optimizerMethod:
+                print("New optimizer!")
+                #self.generator.compileModels(optimizerMethod, True)
                 self.optimizerMethod = optimizerMethod
+            
+            ### ControlNet
+            if useControlNet is True:
+                if controlNetDoPreProcess is False:
+                    controlNetProcess = "BYPASS"
+                # Pre-Process Option
+                self.controlNetProcess = controlNetProcess
+                
+                # ControlNet Input Image
+                if controlNetInput is not None:
+                    controlNetInput = controlNetUtilities.preProcessControlNetImage(controlNetInput, self.controlNetProcess, imageSize = [self.width, self.height])
+                
+                # Checking if input has changed for cache
+                if self.controlNetInput is not None:
+                    # this means we've already done one generation with a controlNet input
+                    if np.array_equal(self.controlNetInput, controlNetInput):
+                        print("ControlNet Inputs match!")
+                    else:
+                        print("Different controlnet inputs!")
+                
+                self.controlNetInput = controlNetInput
+                
+                # Strength of Input Image
+                self.controlNetStrength = controlNetStrength
+
+                # Use Cache?
+                self.controlNetCache = controlNetCache
 
             # Global Variables
             global model
@@ -580,7 +698,7 @@ class dreamWorld:
 
             if type == "Art":
                 # Create still image(s)
-                result = self.generateArt(sampleMethod = self.sampleMethod)
+                result = self.generateArt(sampleMethod = self.sampleMethod, vPrediction = vPrediction)
 
                 videoResult = None
 
@@ -595,22 +713,30 @@ class dreamWorld:
                     zoom = zoom,
                     xTranslation = xTranslation,
                     yTranslation = yTranslation,
+                    reuseInputImage = reuseInputImage,
                     saveVideo = saveVideo,
                     startingFrame = int(startingFrame),
-                    sampleMethod = self.sampleMethod
+                    sampleMethod = self.sampleMethod,
+                    vPrediction = vPrediction,
+                    reuseControlNetInput = reuseControlNetInput
                 )
                 
                 return result, videoResult
 
     def generateArt(
             self,
-            sampleMethod = None
+            sampleMethod = None,
+            vPrediction = False
         ):
         # Global variables
         global userSettings
         
         # Time Keeping
         start = time.perf_counter()
+
+        # Save settings
+        if self.saveSettings is True:
+            readWriteFile.writeToFile("creations/" + str(self.seed) + ".txt", [self.prompt, self.negativePrompt, self.width, self.height, self.scale, self.steps, self.seed, self.pytorchModel, self.batchSize, self.input_image_strength, self.animateFPS, self.videoFPS, self.totalFrames, seedBehavior, "0", "1", "-7", "-7", self.controlNetWeights, self.controlNetStrength])
 
         # Before creation/generation, do we have a compiled?
         if self.generator is None:
@@ -631,7 +757,11 @@ class dreamWorld:
             seed = self.seed,
             input_image = self.input_image,
             input_image_strength = self.input_image_strength,
-            sampler = sampleMethod
+            sampler = sampleMethod,
+            controlNetStrength = self.controlNetStrength,
+            controlNetImage = self.controlNetInput,
+            controlNetCache = self.controlNetCache,
+            vPrediction = vPrediction
         )
 
         print(color.BOLD, color.GREEN, "\nFinished generating!")
@@ -641,16 +771,12 @@ class dreamWorld:
         # Generate PNG metadata for reference
         metaData = self.createMetadata()
 
-        # Save settings
-        if self.saveSettings is True:
-            readWriteFile.writeToFile("creations/" + str(self.seed) + ".txt", [self.prompt, self.negativePrompt, self.width, self.height, self.scale, self.steps, self.seed, self.pytorchModel, self.batchSize, self.input_image_strength, self.animateFPS, self.videoFPS, self.totalFrames, "Positive Iteration", "0", "0", "0", "0"])
-
         # Multiple Image result:
         for img in imgs:
             print("Processing image(s)...")
             imageFromBatch = Image.fromarray(img)
             imageFromBatch.save(userSettings["creationLocation"] + str(int(self.seed)) + str(int(self.batchSize)) + ".png", pnginfo = metaData)
-            print("...image(s) saved!\n")
+            print("...image(s) saved!\n\a\a\a")
             self.batchSize = self.batchSize - 1
 
         print("Returning image!",color.END)
@@ -669,9 +795,12 @@ class dreamWorld:
         zoom = float("1"),
         xTranslation = "0",
         yTranslation = "0",
+        reuseInputImage = False,
         saveVideo = True,
         startingFrame = 0,
-        sampleMethod = None
+        sampleMethod = None,
+        vPrediction = False,
+        reuseControlNetInput = False
     ):
 
         # Before creation/generation, did we compile the model?
@@ -716,7 +845,8 @@ class dreamWorld:
         # Save settings BEFORE running generation in case it crashes
 
         if self.saveSettings is True:
-            readWriteFile.writeToFile(path + "/" + str(self.seed) + ".txt", [self.prompt, self.negativePrompt, self.width, self.height, self.scale, self.steps, self.seed, self.pytorchModel, self.batchSize, self.input_image_strength, self.animateFPS, self.videoFPS, self.totalFrames, seedBehavior, angle, zoom, originalTranslations[0], originalTranslations[1]])
+            readWriteFile.writeToFile(path + "/" + str(self.seed) + ".txt", [self.prompt, self.negativePrompt, self.width, self.height, self.scale, self.steps, self.seed, self.pytorchModel, self.batchSize, self.input_image_strength, self.animateFPS, self.videoFPS, self.totalFrames, seedBehavior, angle, zoom, originalTranslations[0], originalTranslations[1], self.controlNetWeights, self.controlNetStrength])
+        
         
         # Create frames
         for item in range(0, (self.totalFrames) ): # Minus 1 from total frames because we're starting at 0 instead of 1 when counting up. User asks for 24 frames, computer counts from 0 to 23
@@ -732,7 +862,7 @@ class dreamWorld:
 
             # Continue camera movement from prior frame if starting frame was given
             if startingFrame > 0 and item == 0:
-                print("...continuing camera movement...")
+                print("\n...continuing camera movement...")
                 previousFrame = videoUtil.animateFrame2DWarp(
                     previousFrame,
                     angle = angle,
@@ -743,9 +873,20 @@ class dreamWorld:
                     height = self.height
                 )
             
+            if reuseControlNetInput is True:
+                print("\nReusing Initial ControlNet Input Image")
+            else:
+                if previousFrame is not None and frameNumber > 0:
+                    self.controlNetInput = controlNetUtilities.preProcessControlNetImage(previousFrame, self.controlNetProcess, imageSize = [self.width, self.height])
+            
             # Color management
-            """if currentInputFrame is not None:
-                previousFrame = videoUtil.maintain_colors(previousFrame, currentInputFrame)"""
+            if currentInputFrame is not None:
+                previousFrame = videoUtil.maintain_colors(previousFrame, currentInputFrame)
+            
+            # If user chooses to only use the initial input image
+            if reuseInputImage is True:
+                print("\nReusing Initial Input Image")
+                previousFrame = self.input_image
             
             # Update previous frame variable for use in the generation of this frame
             currentInputFrame = previousFrame
@@ -762,11 +903,15 @@ class dreamWorld:
                 seed = seed,
                 input_image = currentInputFrame,
                 input_image_strength = self.input_image_strength,
-                sampler = sampleMethod
+                sampler = sampleMethod,
+                controlNetStrength = self.controlNetStrength,
+                controlNetImage = self.controlNetInput,
+                controlNetCache = self.controlNetCache,
+                vPrediction = vPrediction
             )
 
             ## Save frame
-            print(color.GREEN,"\nFrame generated. Saving to: ",path,color.END)
+            print(color.GREEN,"\nFrame generated. Saving to: \a",path,color.END)
 
             # Generate metadata for saving in the png file
             metaData = self.createMetadata()
@@ -791,8 +936,6 @@ class dreamWorld:
             # previousFrame = videoUtil.maintain_colors(previousFrame, frame[0])
             
             # Memmory Clean Up
-            """frame = None
-            metaData = None"""
             del frame
             del metaData
 
@@ -807,7 +950,7 @@ class dreamWorld:
             renderTime = renderTime + checkTime(start, end)
         
         # Finished message and time keeping
-        print(color.GREEN,"\nCINEMA! Created in:",color.END)
+        print(color.GREEN,"\nCINEMA! Created in:\a",color.END)
         checkTime(0, renderTime)
         print("Per frame:")
         checkTime(0, renderTime/(self.totalFrames))
@@ -834,11 +977,14 @@ class dreamWorld:
         # Metadata to be stored in the image file
         metaData = PngInfo()
         metaData.add_text('prompt', self.prompt)
-        metaData.add_text('negativePrompt', self.negativePrompt)
+        metaData.add_text('negative prompt', self.negativePrompt)
         metaData.add_text('seed', str(int(self.seed)))
         metaData.add_text('CFG scale', str(int(self.scale)))
         metaData.add_text('steps', str(int(self.steps)))
         metaData.add_text('input image strength', str(int(self.input_image_strength)))
+        metaData.add_text('controlNet strength',str(int(self.controlNetStrength)))
+        metaData.add_text('model', self.pytorchModel)
+        
 
         return metaData
 
@@ -846,22 +992,24 @@ print("...done!")
 
 """
 Models and Weights
-    Current supports:
+    Currently supports:
         + Stable Diffusion Models and their variants:
             .ckpt - pytorch
             .h5 - TensorFlow old weights file
-            .pth - Will find controlnet models, but will not load
+            .safetensors
         + VAE models
             .ckpt - pytroch
         + Text Embeddings
             .pt
             .bin
+        + ControLNet
+            .safetensors
 """
 
 print(color.BOLD,"\nSearching for diffusion models...",color.END)
 modelsWeights = modelFinder.findModels(userSettings["modelsLocation"], ".ckpt")
-modelsWeights.extend(modelFinder.findModels(userSettings["modelsLocation"], ".pth"))
 modelsWeights.extend(modelFinder.findModels(userSettings["modelsLocation"], ""))
+modelsWeights.extend(modelFinder.findModels(userSettings["modelsLocation"], ".safetensors"))
 modelsWeights.sort()
 
 print(color.BOLD,"\nSearching for VAE models...",color.END)
@@ -885,11 +1033,17 @@ for index, name in enumerate(embeddingNames):
 # Add the filepath as the first index to the embeddingWeights variable
 embeddingWeights.insert(0, userSettings["EmbeddingsLocation"])
 
-print(color.GREEN,color.BOLD,"\nStarting program:",color.END)
+print(color.BOLD,"\nSearching for ControlNet's...",color.END)
+controlNetWeights = modelFinder.findModels(userSettings["ControlNetsLocation"], ".pth")
+controlNetWeights.extend(modelFinder.findModels(userSettings["ControlNetsLocation"], ".safetensors"))
+# controlNetWeights.extend(modelFinder.findModels(userSettings["ControlNetsLocation"], ".h5"))
+controlNetWeights.sort()
+
+print(color.GREEN,color.BOLD,"\nStarting program:\a",color.END)
 
 """
 Main Class
-    This is the variable we'll be referencing in the Web UI
+    This is the object we'll be referencing in the Web UI
 """
 dreamer = dreamWorld(textEmbedding = embeddingWeights)
 
@@ -928,14 +1082,17 @@ startButton.style(
 )
 
 """
+Image Creation
+"""
+
+"""
 Settings
 """
 
-## Creation ##
 if userSettings["defaultModel"] != "":
     defaultModelValue = modelsWeights[modelsWeights.index(userSettings["defaultModel"])]
 else:
-    defaultModelValue = modelsWeights[0]
+    defaultModelValue = modelsWeights[0] if len(modelsWeights) > 0 else None
 
 listOfModels = gr.Dropdown(
             choices = modelsWeights,
@@ -946,6 +1103,12 @@ listOfModels = gr.Dropdown(
 legacyVersion = gr.Checkbox(
     label = "Use Legacy Stable Diffusion (1.4/1.5)",
     value = userSettingsBool(userSettings["legacyVersion"])
+)
+
+vPrediction = gr.Checkbox(
+    label = "Use SD 2.x-V",
+    value = False,
+    interactive = False
 )
 
 # Height
@@ -980,7 +1143,7 @@ batchSizeSelect = gr.Slider(
 steps = gr.Slider(
     minimum = 2,
     maximum = int(userSettings["stepsMax"]),
-    value = int(userSettings["stepsMax"]) / 2,
+    value = int(userSettings["stepsMax"]) / 4,
     step = 1,
     label = "How many times the AI should sample - Higher numbers = better image"
 )
@@ -1001,7 +1164,27 @@ seed = gr.Number(
 
 )
 
-## Text Embeddings ##
+"""
+Input Image
+"""
+
+inputImage = gr.Image(
+    label = "Input Image"
+)
+
+# Input Image Strength
+inputImageStrength = gr.Slider(
+    minimum = 0,
+    maximum = 1,
+    value = 0.5,
+    step = 0.01,
+    label = "0 = Don't change the image, 1 = ignore image entirely"
+)
+
+"""
+Text Embeddings
+"""
+
 useEmbeddings = gr.Checkbox(
     label = "Use Text Embeddings",
     value = False
@@ -1012,7 +1195,82 @@ embeddingChoices = gr.CheckboxGroup(
     label = "Select embeddings to include in model:"
 )
 
-## .AdvancedSettings
+"""
+ControlNet Settings
+"""
+
+class ControlNetGradioComponents():
+    def __init__(self):
+        self.useControlNet = gr.Checkbox(
+            label = "Use ControlNet",
+            value = False
+        )
+
+        self.controlNetCache = gr.Checkbox(
+            label = "Create cache",
+            value = False
+        )
+
+        self.controlNetChoices = gr.Dropdown(
+            choices = controlNetWeights,
+            label = "ControlNet Model",
+            value = controlNetWeights[0] if len(controlNetWeights) > 0 else None
+        )
+
+        self.controlNetStrengthSlider = gr.Slider(
+            minimum = 0,
+            maximum = 2,
+            value = 1,
+            step = 0.1,
+            label = "Strength"
+        )
+
+        self.controlNetInputImage = gr.Image(
+            label = "Input Image"
+        )
+
+        self.controlNetProcessedImage = gr.Image(
+            label = "Processed Image"
+        )
+
+        self.preProcessImage = gr.Checkbox(
+            label = "Pre-Process Image?",
+            value = True
+        )
+
+        processingOptions = ["Canny", "HED"]
+
+        self.controlNetProcessingOptions = gr.Dropdown(
+            choices = processingOptions,
+            label = "Processing Option",
+            value = processingOptions[0]
+        )
+
+        self.controlNetProcessButton = gr.Button("Preview Image Pre-Process")
+
+        ## Canny Options
+
+        self.controlNetThresholdLow = gr.Slider(
+            minimum = 1,
+            maximum = 255,
+            value = 100,
+            step = 1,
+            label = "Low Threshold"
+        )
+
+        self.controlNetThresholdHigh = gr.Slider(
+            minimum = 1,
+            maximum = 255,
+            value = 200,
+            step = 1,
+            label = "High Threshold"
+        )
+
+ControlNetGradio = ControlNetGradioComponents()
+
+"""
+Advanced Settings
+"""
 
 listOfVAEModels = gr.Dropdown(
             choices = VAEWeights,
@@ -1024,7 +1282,7 @@ deviceChoice = tensorFlowUtilities.listDevices()
 
 listOfDevices = createDeviceComponent(deviceChoice)
 
-sampleChoices = ["Basic", "DPMSolver"]
+sampleChoices = ["Basic"]
 
 sampleMethod = gr.Dropdown(
     choices = sampleChoices,
@@ -1053,21 +1311,6 @@ mixedPrecisionCheckbox = gr.Checkbox(
     value = userSettingsBool(userSettings["mixedPrecision"])
 )
 
-## Input Image
-
-inputImage = gr.Image(
-    label = "Input Image"
-)
-
-# Input Image Strength
-inputImageStrength = gr.Slider(
-    minimum = 0,
-    maximum = 1,
-    value = 0.5,
-    step = 0.01,
-    label = "0 = Don't change the image, 1 = ignore image entirely"
-)
-
 # Prompt Engineering
 
 starterPrompts = createPromptComponents(starterPrompt)
@@ -1094,7 +1337,9 @@ else:
                 value = None
             )
 
-## Video
+"""
+Video
+"""
 
 # Project Name
 
@@ -1141,6 +1386,16 @@ seedBehavior = gr.Dropdown(
 saveVideo = gr.Checkbox(
     label = "Save result as a video?",
     value = True
+)
+
+reuseInputForVideo = gr.Checkbox(
+    label = "Reuse initial input image?",
+    value = False
+)
+
+reuseControlNetForVideo = gr.Checkbox(
+    label = "Reuse initial ControlNet input image?",
+    value = False
 )
 
 # Image Movement
@@ -1250,7 +1505,7 @@ with gr.Blocks(
 ) as demo:
     #Title
     gr.Markdown(
-        "<center><span style = 'font-size: 32px'>Stable Diffusion</span><br><span style = 'font-size: 16px'>Tensorflow and Apple Metal<br>Intel Mac</span></center>"
+        "<center><span style = 'font-size: 32px'>MetalDiffusion</span><br><span style = 'font-size: 16px'>Stable Diffusion for MacOS<br>Intel Mac</span></center>"
     )
 
     with gr.Row():
@@ -1288,6 +1543,7 @@ with gr.Blocks(
 
                             # Legacy vs Contemporary Edition
                             legacyVersion.render()
+                            vPrediction.render()
 
                             gr.Markdown("<center>Image dimensions</center>")
                             # Width
@@ -1336,6 +1592,36 @@ with gr.Blocks(
                     # useEmbeddings.render()
 
                     embeddingChoices.render()
+                
+                with gr.Tab("ControlNet"):
+                    # Use ControlNet and Model Choice
+                    with gr.Row():
+                        with gr.Column():
+
+                            ControlNetGradio.useControlNet.render()
+                            ControlNetGradio.controlNetCache.render()
+                            ControlNetGradio.preProcessImage.render()
+
+                        ControlNetGradio.controlNetChoices.render()
+                    
+                    ControlNetGradio.controlNetStrengthSlider.render()
+
+                    # ControlNet Input Image and Preview
+                    with gr.Row():
+
+                        ControlNetGradio.controlNetInputImage.render()
+
+                        ControlNetGradio.controlNetProcessedImage.render()
+                    
+                    gr.Markdown("<center>Pre-Processing</center>")
+                    # ControlNet Process Option and Preview Button
+                    with gr.Row():
+                        ControlNetGradio.controlNetProcessingOptions.render()
+
+                        ControlNetGradio.controlNetProcessButton.render()
+                    # Canny Edge Options
+                    ControlNetGradio.controlNetThresholdLow.render()
+                    ControlNetGradio.controlNetThresholdHigh.render()
 
             with gr.Tab("Advanced Settings"):
 
@@ -1376,19 +1662,32 @@ with gr.Blocks(
 
                 with gr.Tab("Settings"):
 
-                    projectName.render()
+                    with gr.Row():
 
-                    animatedFPS.render()
-                    
-                    videoFPS.render()
+                        projectName.render()
 
-                    totalFrames.render()
+                        saveVideo.render()
 
-                    startingFrame.render()
+                    with gr.Row():
+                        
+                        animatedFPS.render()
+                        
+                        videoFPS.render()
 
-                    seedBehavior.render()
+                    with gr.Row():
+                        totalFrames.render()
 
-                    saveVideo.render()
+                        startingFrame.render()
+
+                    with gr.Row():
+
+                        seedBehavior.render()
+
+                        with gr.Column():
+
+                            reuseInputForVideo.render()
+
+                            reuseControlNetForVideo.render()
                 
                 with gr.Tab("Camera Movement"):
 
@@ -1463,6 +1762,12 @@ with gr.Blocks(
 
     ## Event actions
 
+    controlNetPreProcessingInputs = [ControlNetGradio.controlNetInputImage, ControlNetGradio.controlNetProcessingOptions, ControlNetGradio.controlNetThresholdLow, ControlNetGradio.controlNetThresholdHigh]
+
+    """
+    Top Row
+    """
+
     # When start button is pressed
     startButton.click(
         fn = dreamer.create,
@@ -1497,10 +1802,31 @@ with gr.Blocks(
             mixedPrecisionCheckbox,
             sampleMethod,
             optimizerMethod,
-            listOfDevices
+            listOfDevices,
+            ControlNetGradio.useControlNet,
+            ControlNetGradio.controlNetChoices,
+            ControlNetGradio.preProcessImage,
+            ControlNetGradio.controlNetProcessingOptions,
+            ControlNetGradio.controlNetInputImage,
+            ControlNetGradio.controlNetStrengthSlider,
+            ControlNetGradio.controlNetCache,
+            vPrediction,
+            reuseInputForVideo,
+            reuseControlNetForVideo
         ],
         outputs = [result, resultVideo]
     )
+
+    # When creation type is selected
+    creationType.change(
+        fn = switchResult,
+        inputs = creationType,
+        outputs = [result, resultVideo]
+    )
+
+    """
+    Image Creation Settings
+    """
     
     # When new seed is pressed
     newSeed.click(
@@ -1509,12 +1835,19 @@ with gr.Blocks(
         outputs = seed,
     )
 
-    # When add prompt is pressed
-    addPrompt.click(
-        fn = addToPrompt,
-        inputs = [prompt, listOfEmbeddings, starterPrompts[0], starterPrompts[1], starterPrompts[2], starterPrompts[3], starterPrompts[4]],
-        outputs = [prompt, starterPrompts[0], starterPrompts[1], starterPrompts[2], starterPrompts[3], starterPrompts[4]]
+    """
+    ControlNet
+    """
+
+    ControlNetGradio.controlNetProcessButton.click(
+        fn = controlNetUtilities.previewProcessControlNetImage,
+        inputs = controlNetPreProcessingInputs,
+        outputs = ControlNetGradio.controlNetProcessedImage
     )
+    
+    """
+    Import
+    """
 
     # When import button is pressed
     importPromptButton.click(
@@ -1538,18 +1871,26 @@ with gr.Blocks(
             angle,
             zoom,
             xTranslate,
-            yTranslate
+            yTranslate,
+            ControlNetGradio.controlNetChoices,
+            ControlNetGradio.controlNetStrengthSlider
         ]
     )
 
-    # When creation type is selected
-    creationType.change(
-        fn = switchResult,
-        inputs = creationType,
-        outputs = [result, resultVideo]
+    """
+    Prompt Generator
+    """
+
+    # When add prompt is pressed
+    addPrompt.click(
+        fn = addToPrompt,
+        inputs = [prompt, listOfEmbeddings, starterPrompts[0], starterPrompts[1], starterPrompts[2], starterPrompts[3], starterPrompts[4]],
+        outputs = [prompt, starterPrompts[0], starterPrompts[1], starterPrompts[2], starterPrompts[3], starterPrompts[4]]
     )
 
-    ## Tools
+    """
+    Tools
+    """
 
     # Save Model
 
@@ -1584,7 +1925,9 @@ with gr.Blocks(
         outputs = None
     )
 
-    ## End Program
+    """
+    Bottom Row
+    """
 
     endProgramButton.click(
         fn = endProgram,
