@@ -149,11 +149,11 @@ To finish the program, in `Terminal` type `CTRL+C` and the program will quit or 
 
 Stable Diffusion 2.0 (SD) uses two different models than SD 1.4 and 1.5. It's important to select the correct mode when creating with your model(s).
 
-Under *Advanced Settings*, select your model. Then select `Use Legacy Stable Diffusion` if you are using any SD models made prior to the release of SD 2.0.
+Under *Settings*, select your model. Then select `Use Legacy Stable Diffusion` if you are using any SD models made prior to the release of SD 2.0.
 
 #### Differences between the legacy model and contemporary model
 
-What changed between the two models were:
+What changed between the two versions of Stable Diffusion were:
 
 **The Text Encoder model**
 
