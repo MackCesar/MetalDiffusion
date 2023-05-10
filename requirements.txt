@@ -1,11 +1,6 @@
 h5py
 Pillow
-tqdm
-tensorboard
-tensorboard-data-server
-tensorboard-plugin-wit
 tensorflow-addons
-tensorflow-estimator
 tensorflow-macos
 tensorflow-metal
 ftfy
