@@ -189,6 +189,10 @@ The following outputs have been generated using this implementation:
 
 ![a](creations/4530009741.png)
 
+6) ***ControlNet HED*** with Pre-Processed Example: *tintype photograph of Sigourney Weaver smiling, her hand holding an orange tabby cat, vintage black and white photography, wet plate photography, ambrotype photograph, daguerreotype photo, science fiction, highly detailed, intricate details*
+
+![a](creations/20213827041.png) ![a](creations/20213827041_HED.png)
+
 ## References
 
 1) https://github.com/CompVis/stable-diffusion
