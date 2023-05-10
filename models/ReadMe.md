@@ -39,3 +39,9 @@ Currently, as of 3/14/23, the program can only load VAE's as ".ckpt"
 Place Textual Inversion weights, aka Text Embeddings, here.
 
 Currently, as of 3/14/23, the program accepts weights in the ".pt" and ".bin" formats.
+
+## "controlnets/" Folder
+
+Place ControlNet weights here.
+
+Currently, as of 5/10/23, the program accepts weights in the ".safetensors" and ".pth" formats.
