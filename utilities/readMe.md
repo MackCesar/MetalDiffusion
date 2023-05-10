@@ -23,3 +23,10 @@ This script contains the factory defaults for the webUI.
 **Video Utilities** is a script that handles all things regarding video creation.
 
 Currently, the zoom out function isn't working as intended. Beware!
+
+## controlNetUtilities.py
+**ControlNet Utilities** focuses on pre-processing images for the ControlNet model.
+
+Currently, it can only pre-process images with Canny Edge detection and Soft Edge detection. The reason: other pre-processing methods currently need PyTorch and my aim with the program is to be agnostic of PyTorch and TensorFlow.
+
+NOTE: You don't need to pre-process the image in MetalDiffusion, you can bypass it entirely.
