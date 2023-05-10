@@ -47,7 +47,11 @@ def listDevices(
     # Finally, connect what Tensorflow found with what system profiler found, assuming they're discoverd in the same order
     i = 0
     for gpu in deviceList:
-        gpu['TensorFlow'] = GPUs[i]
+        try:
+            gpu['TensorFlow'] = GPUs[i]
+        except Exception as e:
+            print(e)
+            gpu['TensorFlow'] = GPUs[0]
         i += 1
     
     """

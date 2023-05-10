@@ -1,8 +1,11 @@
 import os, fnmatch, sys, configparser
 
-### Global variables
+"""
+Settings Control
 
-### Functions
+User preferences, file location folders, and factory settings are created and loaded with this module.
+
+"""
 
 def loadSettings(fileLocation, returnType = 0):
     try:
@@ -55,7 +58,8 @@ def createUserPreferences(fileLocation):
         "saveSettings" : "True",
         "VAEModelsLocation" : "models/VAE/",
         "EmbeddingsLocation" : "models/embeddings/",
-        "mixedPrecision" : "False"
+        "mixedPrecision" : "False",
+        "ControlNetsLocation": "models/controlnets/"
     }
 
     with open(fileLocation, 'w') as conf:

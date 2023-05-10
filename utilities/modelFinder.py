@@ -17,6 +17,7 @@ def findModels(
     currentList = [] # local variable list for found files with a default already added
     for file in directory:
         if type != "Keras .h5":
+            # For all types EXCEPT .h5
             if file.endswith(type):
                 # Prints only type of file present in the folder
                 print(" ",file," found!")
@@ -28,7 +29,8 @@ def findModels(
                 # print(finalName)
                 currentList.append(finalName)
         else:
-            if "VAE" not in file and "embeddings" not in file and "." not in file:
+            if "VAE" not in file and "embeddings" not in file and "controlnets" not in file and "." not in file:
+                # Skip 'VAE', 'embeddings', and hidden '.' folders
                 print(" ",file," found!")
                 currentList.append(file)
     

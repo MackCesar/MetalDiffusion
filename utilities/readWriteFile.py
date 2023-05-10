@@ -48,22 +48,43 @@ def readFromFile(path):
 
     data = file.read()
 
-    list = data.split("\n")
+    creationList = data.split("\n")
 
-    for item in range(len(list)):
+    if len(creationList) < 20:
+        print("\nImporting data from an old structure, some data may be incorrect or missing")
+        missingItems = 20 - len(creationList)
+        for item in range(missingItems):
+            creationList.append("NODATA")
+
+    for item in range(len(creationList)):
         # [0]Prompt, [1]NegativePrompt, [13]SeedBehavior
         # [16]xTranslation, [17]yTranslation
+        # [18]ControlNet Weights
+
+        # Strings ^
+
         # [2]Width, [3]Height, [5]Steps, [8]Batch Size, [10]AnimatedFPS
         # [11]VideoFPS, [12]Total Frames
         if item is 2 or item is 3 or item is 5 or item is 8 or item is 10 or item is 11 or item is 12:
-            list[item] = int(list[item])
-        # [4]Scale, [9]Input Image Strength, [14]Angle, [15]Zoom
-        if item is 4 or item is 9 or item is 14 or item is 15:
-            list[item] = float(list[item])
+            if creationList[item] == "NODATA":
+                creationList[item] = 1
+            else:
+                creationList[item] = int(creationList[item])
+        # [4]Scale, [9]Input Image Strength, [14]Angle, [15]Zoom, [19]ControlNet Strength
+        if item is 4 or item is 9 or item is 14 or item is 15 or item is 19:
+            if creationList[item] == "NODATA":
+                creationList[item] = 0.0
+            elif creationList[item] == "slider":
+                creationList[item] == "1"
+            else:
+                creationList[item] = float(creationList[item])
         # [6]Seed
         if item is 6:
-            list[item] = int(float(list[item]))
+            if creationList[item] == "NODATA":
+                creationList[item] = 12345
+            else:
+                creationList[item] = int(float(creationList[item]))
 
     file.close()
 
-    return list
+    return creationList
