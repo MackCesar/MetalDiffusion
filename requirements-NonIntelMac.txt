@@ -13,3 +13,4 @@ torch
 opencv-python
 numexpr
 pytorch-lightning
+safetensors
