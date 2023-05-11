@@ -66,7 +66,7 @@ from .tools import textEmbeddings as textEmbeddingTools
 from PIL import Image
 
 ### Sampler modules
-from .samplers import DPMSolverKerasCV as DPMSolver 
+from .samplers import DPMSolverKerasCV as DPMSolver
 from .samplers.basicSampler import BasicSampler
 
 ### Global Variables
@@ -172,12 +172,20 @@ class StableDiffusion:
         
         ### Step 7: Load ControlNet Weights ###
         if controlNet[0] == True:
-            loadWeightsFromSafeTensor(
-                self,
-                controlNet[1], # Which weights to load, in this case maybe all four models
-                legacy, # Which version of Stable Diffusion
-                ['controlNet'] # Which specific Models to load
-            )
+            if ".safetensors" in controlNet[1]:
+                loadWeightsFromSafeTensor(
+                    self,
+                    controlNet[1], # Which weights to load, in this case maybe all four models
+                    legacy, # Which version of Stable Diffusion
+                    ['controlNet'] # Which specific Models to load
+                )
+            elif ".pth" in controlNet[1]:
+                loadWeightsFromPytorchCKPT(
+                    self,
+                    controlNet[1], # Which weights to load, in this case maybe all four models
+                    legacy, # Which version of Stable Diffusion
+                    ['controlNet'] # Which specific Models to load
+                )
 
         ### Step 8: Compile Models ###
         self.jitCompile = jit_compile
