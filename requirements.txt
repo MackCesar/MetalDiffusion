@@ -13,3 +13,4 @@ opencv-python
 numexpr
 pytorch-lightning
 numpy
+safetensors
