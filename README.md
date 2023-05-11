@@ -75,7 +75,7 @@ Download the repo, either by downloading the
 file or by cloning the repo with git:
 
 ```bash
-git clone https://github.com/soten355/stable-diffusion-tensorflow-IntelMetal.git
+git clone https://github.com/soten355/MetalDiffusion.git
 ```
 
 ### Start working in the virutal environment
