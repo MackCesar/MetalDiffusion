@@ -192,7 +192,7 @@ The following outputs have been generated using this implementation:
 6) ***ControlNet HED*** with Pre-Processed Example: *tintype photograph of Sigourney Weaver smiling, her hand holding an orange tabby cat, vintage black and white photography, wet plate photography, ambrotype photograph, daguerreotype photo, science fiction, highly detailed, intricate details*
 
 <img src="creations/20213827041.png" width="256" />
-<img src="creations/20213827041_HED.png" width="256 />
+<img src="creations/20213827041_HED.png" width="256" />
 
 ## References
 
