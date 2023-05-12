@@ -481,6 +481,7 @@ class StableDiffusion:
             pos_ids = np.repeat(pos_ids, batch_size, axis = 0)
         else:
             # First, encode the prompt
+            TextLimit += 1
             if isinstance(prompt, str):
                 inputs = [prompt]
             # Then tokenize the prompt
