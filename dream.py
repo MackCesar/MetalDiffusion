@@ -53,6 +53,8 @@ import utilities.videoUtilities as videoUtil
 import utilities.tensorFlowUtilities as tensorFlowUtilities
 from utilities.consoleUtilities import color
 import utilities.controlNetUtilities as controlNetUtilities
+from utilities.depthMapping.run_pb import run as generateDepthMap
+from utilities.tileSetter import setTiles
 
 print("...all modules loaded!")
 
@@ -84,7 +86,10 @@ except Exception as e:
 
 print("...global variables created!")
 
-### Command Line (CLI) Overrides:
+"""
+Command Line (CLI) Overrides
+    This allows the user to override specific aspects of the Gradio implementation
+"""
 
 parser = argparse.ArgumentParser()
 
@@ -337,6 +342,40 @@ def switchResult(type):
         videoResult = gr.Video.update(visible = True)
         return artResult, videoResult
 
+def switchControlNetOptions(type):
+
+    if type == "None":
+        # Canny
+        controlNetThresholdLow = gr.Slider.update(visible = False)
+        controlNetThresholdHigh = gr.Slider.update(visible = False)
+        # Tile
+        controlNetTileSize = gr.Slider.update(visible = False)
+        controlNetUpscaleMethod = gr.Slider.update(visible = False)
+    elif type == "Canny":
+        # Canny
+        controlNetThresholdLow = gr.Slider.update(visible = True)
+        controlNetThresholdHigh = gr.Slider.update(visible = True)
+        # Tile
+        controlNetTileSize = gr.Slider.update(visible = False)
+        controlNetUpscaleMethod = gr.Slider.update(visible = False)
+    elif type == "HED":
+        # Canny
+        controlNetThresholdLow = gr.Slider.update(visible = False)
+        controlNetThresholdHigh = gr.Slider.update(visible = False)
+        # Tile
+        controlNetTileSize = gr.Slider.update(visible = False)
+        controlNetUpscaleMethod = gr.Slider.update(visible = False)
+    elif type == "Tile":
+        # Canny
+        controlNetThresholdLow = gr.Slider.update(visible = False)
+        controlNetThresholdHigh = gr.Slider.update(visible = False)
+        # Tile
+        controlNetTileSize = gr.Slider.update(visible = True)
+        controlNetUpscaleMethod = gr.Slider.update(visible = True)
+    
+    return controlNetThresholdLow, controlNetThresholdHigh, controlNetTileSize, controlNetUpscaleMethod
+
+
 def userSettingsBool(setting):
     if setting == "True":
         return True
@@ -402,6 +441,7 @@ class dreamWorld:
         self.controlNetWeights = None
         self.controlNetProcess = None
         self.controlNetInput = None
+        self.controlNetGuess = False
         self.controlNetStrength = 1
         self.controlNetCache = False
 
@@ -423,7 +463,7 @@ class dreamWorld:
         global userSettings
         global ControlNetGradio
 
-        print(color.BLUE, color.BOLD,"\nStarting Stable Diffusion with Tensor flow and Apple Metal",color.END)
+        print(color.BLUE, color.BOLD,"\nStarting Stable Diffusion with TensorFlow and Apple Metal",color.END)
 
         ## Memory Management
         # del self.generator
@@ -440,7 +480,6 @@ class dreamWorld:
             if self.pytorchModel is None:
                 self.pytorchModel = userSettings["defaultModel"]
             modelLocation = userSettings["modelsLocation"] + self.pytorchModel
-            # model = self.pytorchModel
         
         ### VAE Weights
         ## Will replace Encoder and Decoder weights
@@ -534,11 +573,15 @@ class dreamWorld:
         deviceOption = '/gpu:0',
         useControlNet = False,
         controlNetWeights = None,
-        controlNetDoPreProcess = True,
         controlNetProcess = None,
         controlNetInput = None,
+        controlNetGuess = False,
         controlNetStrength = 1,
         controlNetCache = False,
+        controlNetLowThreshold = 100,
+        controlNetHighThreshold = 200,
+        controlNetTileUpscale = None,
+        controlNetUpscaleMethod = None,
         vPrediction = False,
         reuseInputImage = False,
         reuseControlNetInput = False
@@ -548,6 +591,7 @@ class dreamWorld:
         global deviceChoice
         global ControlNetGradio
         global userSettings
+        global model
 
         # Update object variables that don't trigger a re-compile
         self.prompt = prompt
@@ -593,7 +637,7 @@ class dreamWorld:
             # No given embeddings means ignoring text embeddings
             embeddingChoices = None
         
-        # ControlNet
+        # ControlNet Bypass, cancels out any user inputs if user explicity says "Don't use ControlNet"
         if useControlNet is False:
             controlNetWeights = None
             controlNetProcess = None
@@ -602,7 +646,8 @@ class dreamWorld:
 
         with tf.device(selectedDevice):
 
-            # Critical Changes that require a re-compile
+            ### Critical Changes that require a re-compile
+
             if width != self.width or height != self.height or embeddingChoices != self.embeddingChoices or controlNetWeights != self.controlNetWeights:
                 print(color.WARNING,"\nCritical changes made for creation, compiling new model",color.END)
                 print("\nNew inputs: \n","Width:",width,"Height:",height,"Batch Size:",batchSize,"\n  Embeddings:",embeddingChoices,"\n   ControlNet:",controlNetWeights)
@@ -625,8 +670,6 @@ class dreamWorld:
                 # Basic Variables
                 self.width = int(width)
                 self.height = int(height)
-                # self.pytorchModel = pytorchModel
-                # self.VAE = VAE
 
                 ## Text Embeddings
                 self.embeddingChoices = embeddingChoices
@@ -634,17 +677,19 @@ class dreamWorld:
                 ### ControlNet
                 self.controlNetWeights = controlNetWeights
             
-            # Regular Changes that do not require re-compile
+            ### Regular Changes that do not require re-compile
+
+            ## Weights
 
             if pytorchModel != self.pytorchModel:
                 tf.print(color.BLUE)
                 tf.print("New model weights selected!\nApplying weights from:\n",pytorchModel,color.END)
 
-                # Main Model
+                # Main Model Weights
                 self.pytorchModel = pytorchModel
                 modelLocation = userSettings["modelsLocation"] + self.pytorchModel
 
-                # VAE
+                # VAE Weights
                 self.VAE = VAE
                 if self.VAE != "Original":
                     VAELocation = userSettings["VAEModelsLocation"] + self.VAE
@@ -652,7 +697,11 @@ class dreamWorld:
                     VAELocation = "Original"
                 
                 # Update weights
-                self.generator.setWeights(modelLocation, VAELocation)
+
+                if self.generator is not None:
+                    self.generator.setWeights(modelLocation, VAELocation)
+                else:
+                    self.compileDreams(embeddingChoices = embeddingChoices, useControlNet = useControlNet)
             else:
                 tf.print(color.BLUE)
                 tf.print("Using model weights:\n",pytorchModel,color.END)
@@ -664,16 +713,24 @@ class dreamWorld:
                 #self.generator.compileModels(optimizerMethod, True)
                 self.optimizerMethod = optimizerMethod
             
-            ### ControlNet
+            ## ControlNet
             if useControlNet is True:
-                if controlNetDoPreProcess is False:
-                    controlNetProcess = "BYPASS"
                 # Pre-Process Option
+                if controlNetProcess == "None":
+                    print("User selected no processing for controlnet")
+                    controlNetProcess = "BYPASS"
                 self.controlNetProcess = controlNetProcess
                 
                 # ControlNet Input Image
                 if controlNetInput is not None:
-                    controlNetInput = controlNetUtilities.preProcessControlNetImage(controlNetInput, self.controlNetProcess, imageSize = [self.width, self.height])
+                    controlNetInput = controlNetUtilities.preProcessControlNetImage(
+                        image = controlNetInput,
+                        processingOption = self.controlNetProcess,
+                        imageSize = [self.width, self.height],
+                        cannyOptions = [controlNetLowThreshold, controlNetHighThreshold],
+                        tileScale = int(controlNetTileUpscale),
+                        upscaleMethod = controlNetUpscaleMethod
+                    )
                 
                 # Checking if input has changed for cache
                 if self.controlNetInput is not None:
@@ -685,16 +742,25 @@ class dreamWorld:
                 
                 self.controlNetInput = controlNetInput
                 
-                # Strength of Input Image
+                # Strength of ControlNet
+                self.controlNetGuess = controlNetGuess
                 self.controlNetStrength = controlNetStrength
+
+                if self.controlNetGuess is True:
+                    self.controlNetStrength = [self.controlNetStrength * (0.825 ** float(12 - i)) for i in range(13)]
+                else:
+                    self.controlNetStrength = [self.controlNetStrength] * 13
 
                 # Use Cache?
                 self.controlNetCache = controlNetCache
+            else:
+                self.controlNetWeights = controlNetWeights
+                self.controlNetProcess = controlNetProcess
+                self.controlNetInput = controlNetInput
+                self.controlNetCache = controlNetCache
+                self.controlNetStrength = [1] * 13
 
-            # Global Variables
-            global model
-
-            # What to create?
+            ### What to create? ###
 
             if type == "Art":
                 # Create still image(s)
@@ -746,46 +812,114 @@ class dreamWorld:
 
         print(self.prompt)
 
-        # Use the generator function within the newly created class to generate an array that will become an image
-        imgs = self.generator.generate(
-            prompt = self.prompt,
-            negativePrompt = self.negativePrompt,
-            num_steps = self.steps,
-            unconditional_guidance_scale = self.scale,
-            temperature = 1,
-            batch_size = self.batchSize,
-            seed = self.seed,
-            input_image = self.input_image,
-            input_image_strength = self.input_image_strength,
-            sampler = sampleMethod,
-            controlNetStrength = self.controlNetStrength,
-            controlNetImage = self.controlNetInput,
-            controlNetCache = self.controlNetCache,
-            vPrediction = vPrediction
-        )
+        if self.controlNetInput is not None and len(self.controlNetInput) > 1:
+            print("\nTile mode activated. Rendering:",str(len(self.controlNetInput) - 1),"tiles")
+            # Create variables
+            imgs = []
+            resultingTiles = []
+            numberOfTiles = len(self.controlNetInput)
+            tileProgress = 1
 
-        print(color.BOLD, color.GREEN, "\nFinished generating!")
+            # Get Tile Size, it's the last item of the list
+            originalTileSize = self.controlNetInput[0].shape[0]
+            self.controlNetInput.pop()
+            for tile in self.controlNetInput:
+                tf.print(color.BLUE,"\nProcessing Tile Number", tileProgress,color.END)
+                tileInputImage = tile
+                tileControlNetInput = tf.constant(tile.copy(), dtype = tf.float32) / 255.0
+                tileControlNetInput = [tileControlNetInput]
+                # Use the generator function within the newly created class to generate an array that will become an image
+                imgs = self.generator.generate(
+                    prompt = self.prompt,
+                    negativePrompt = self.negativePrompt,
+                    num_steps = self.steps,
+                    unconditional_guidance_scale = self.scale,
+                    temperature = 1,
+                    batch_size = self.batchSize,
+                    seed = self.seed,
+                    input_image = tileInputImage,
+                    input_image_strength = self.input_image_strength,
+                    sampler = sampleMethod,
+                    controlNetStrength = self.controlNetStrength,
+                    controlNetImage = tileControlNetInput,
+                    controlNetCache = self.controlNetCache,
+                    vPrediction = vPrediction
+                )
 
-        ### Create final image from the generated array ###
+                print(color.BOLD, color.GREEN, "\nTile Done!")
 
-        # Generate PNG metadata for reference
-        metaData = self.createMetadata()
+                ### Create final image from the generated array ###
 
-        # Multiple Image result:
-        for img in imgs:
-            print("Processing image(s)...")
-            imageFromBatch = Image.fromarray(img)
-            imageFromBatch.save(userSettings["creationLocation"] + str(int(self.seed)) + str(int(self.batchSize)) + ".png", pnginfo = metaData)
-            print("...image(s) saved!\n\a\a\a")
-            self.batchSize = self.batchSize - 1
+                # Generate PNG metadata for reference
+                metaData = self.createMetadata()
 
-        print("Returning image!",color.END)
+                # Multiple Image result:
+                for img in imgs:
+                    print("Processing tile...")
+                    imageFromBatch = Image.fromarray(img)
+                    imageFromBatch.save(userSettings["creationLocation"] + str(int(self.seed)) + "_TILE0" + str(int(tileProgress)) + ".png", pnginfo = metaData)
+                    print("...tile saved!\n\a")
+                    resultingTiles.append(img)
 
-        # Time keeping
-        end = time.perf_counter()
-        checkTime(start, end)
+                print("Returning image!",color.END)
 
-        return imgs
+                # Time keeping
+                end = time.perf_counter()
+                checkTime(start, end)
+                start = time.perf_counter()
+
+                # Update tile progress
+                tileProgress += 1
+            
+            # Combine all tiles togeter
+            print("Tiles done! Setting tiles now...")
+            finalImage = setTiles(resultingTiles)
+            finalImage.save(userSettings["creationLocation"] + str(int(self.seed)) + "_FINAL.png", pnginfo = metaData)
+            print(color.GREEN)
+            print("Completed! Returning final image",color.END)
+            return [finalImage]
+        else:
+
+            # Use the generator function within the newly created class to generate an array that will become an image
+            imgs = self.generator.generate(
+                prompt = self.prompt,
+                negativePrompt = self.negativePrompt,
+                num_steps = self.steps,
+                unconditional_guidance_scale = self.scale,
+                temperature = 1,
+                batch_size = self.batchSize,
+                seed = self.seed,
+                input_image = self.input_image,
+                input_image_strength = self.input_image_strength,
+                sampler = sampleMethod,
+                controlNetStrength = self.controlNetStrength,
+                controlNetImage = self.controlNetInput,
+                controlNetCache = self.controlNetCache,
+                vPrediction = vPrediction
+            )
+
+            print(color.BOLD, color.GREEN, "\nFinished generating!")
+
+            ### Create final image from the generated array ###
+
+            # Generate PNG metadata for reference
+            metaData = self.createMetadata()
+
+            # Multiple Image result:
+            for img in imgs:
+                print("Processing image(s)...")
+                imageFromBatch = Image.fromarray(img)
+                imageFromBatch.save(userSettings["creationLocation"] + str(int(self.seed)) + str(int(self.batchSize)) + ".png", pnginfo = metaData)
+                print("...image(s) saved!\n\a\a\a")
+                self.batchSize = self.batchSize - 1
+
+            print("Returning image!",color.END)
+
+            # Time keeping
+            end = time.perf_counter()
+            checkTime(start, end)
+
+            return imgs
     
     def generateCinema(
         self,
@@ -979,11 +1113,16 @@ class dreamWorld:
         metaData.add_text('prompt', self.prompt)
         metaData.add_text('negative prompt', self.negativePrompt)
         metaData.add_text('seed', str(int(self.seed)))
-        metaData.add_text('CFG scale', str(int(self.scale)))
+        metaData.add_text('CFG scale', str(self.scale))
         metaData.add_text('steps', str(int(self.steps)))
-        metaData.add_text('input image strength', str(int(self.input_image_strength)))
-        metaData.add_text('controlNet strength',str(int(self.controlNetStrength)))
+        metaData.add_text('input image strength', str(self.input_image_strength))
+        if isinstance(self.controlNetStrength, list):
+            controlNetStrength = int(self.controlNetStrength[0])
+        else:
+            controlNetStrength = self.controlNetStrength
+        metaData.add_text('controlNet strength',str(controlNetStrength))
         metaData.add_text('model', self.pytorchModel)
+        metaData.add_text('batch size',str(self.batchSize))
         
 
         return metaData
@@ -1108,7 +1247,7 @@ legacyVersion = gr.Checkbox(
 vPrediction = gr.Checkbox(
     label = "Use SD 2.x-V",
     value = False,
-    interactive = False
+    interactive = True
 )
 
 # Height
@@ -1233,12 +1372,12 @@ class ControlNetGradioComponents():
             label = "Processed Image"
         )
 
-        self.preProcessImage = gr.Checkbox(
-            label = "Pre-Process Image?",
-            value = True
+        self.guessMode = gr.Checkbox(
+            label = "Guess Mode",
+            value = False
         )
 
-        processingOptions = ["Canny", "HED"]
+        processingOptions = ["None", "Canny", "HED", "Tile"]
 
         self.controlNetProcessingOptions = gr.Dropdown(
             choices = processingOptions,
@@ -1255,7 +1394,8 @@ class ControlNetGradioComponents():
             maximum = 255,
             value = 100,
             step = 1,
-            label = "Low Threshold"
+            label = "Low Threshold",
+            visible = False
         )
 
         self.controlNetThresholdHigh = gr.Slider(
@@ -1263,7 +1403,28 @@ class ControlNetGradioComponents():
             maximum = 255,
             value = 200,
             step = 1,
-            label = "High Threshold"
+            label = "High Threshold",
+            visible = False
+        )
+
+        ## Tile Options
+
+        scaleOptions = [2, 4, 8]
+
+        self.controlNetTileSize = gr.Dropdown(
+            choices = scaleOptions,
+            value = "4",
+            label = "Scale",
+            visible = False
+        )
+
+        upscalerOptions = ["BICUBIC", "ESRGAN-TensorFlow"]
+
+        self.controlNetUpscaleMethod = gr.Dropdown(
+            choices = upscalerOptions,
+            value = "BICUBIC",
+            label = "Upscale Method",
+            visible = False
         )
 
 ControlNetGradio = ControlNetGradioComponents()
@@ -1311,11 +1472,9 @@ mixedPrecisionCheckbox = gr.Checkbox(
     value = userSettingsBool(userSettings["mixedPrecision"])
 )
 
-# Prompt Engineering
-
-starterPrompts = createPromptComponents(starterPrompt)
-
-addPrompt = gr.Button("Add to prompt")
+"""
+Import
+"""
 
 importPromptLocation = gr.File(
     label = "Import Prior Prompt and settings for prompt",
@@ -1323,19 +1482,6 @@ importPromptLocation = gr.File(
 )
 
 importPromptButton = gr.Button("Import prompt")
-
-if len(embeddingNames) > 0:
-    listOfEmbeddings = gr.Dropdown(
-                choices = embeddingNames,
-                label = "Text Embeddings",
-                value = embeddingNames[0]
-            )
-else:
-    listOfEmbeddings = gr.Dropdown(
-                choices = None,
-                label = "Text Embeddings",
-                value = None
-            )
 
 """
 Video
@@ -1429,7 +1575,57 @@ yTranslate = gr.Textbox(
     value = "-7"
 )
 
-## Gradio.Tools
+"""
+Tools
+"""
+
+"""
+Tools > Depth Mapping
+"""
+
+class depthMappingGradioComponents():
+    def __init__(self):
+        self.inputImage = gr.Image(
+            label = "Input Image",
+            type = "filepath"
+        )
+
+        self.outputImage = gr.Image(
+            label = "Output Image",
+        )
+
+        self.processImageButton = gr.Button("Process")
+
+DepthMappingGradio = depthMappingGradioComponents()
+
+"""
+Tools > Prompt Engineering
+"""
+
+# Create slots of prompt lists
+
+starterPrompts = createPromptComponents(starterPrompt)
+
+addPrompt = gr.Button("Add to prompt")
+
+# List of embeddings that were loaded into the program
+
+if len(embeddingNames) > 0:
+    listOfEmbeddings = gr.Dropdown(
+                choices = embeddingNames,
+                label = "Text Embeddings",
+                value = embeddingNames[0]
+            )
+else:
+    listOfEmbeddings = gr.Dropdown(
+                choices = None,
+                label = "Text Embeddings",
+                value = None
+            )
+
+"""
+Tools > Model Conversion
+"""
 
 saveModelName = gr.Textbox(
     label = "Model Name",
@@ -1440,17 +1636,9 @@ saveModelButton = gr.Button("Save model")
 
 pruneModelButton = gr.Button("Optimize Model")
 
-checkModelButton = gr.Button("Check Model")
-
-analyzeModelWeightsButton = gr.Button("Analyze Model Weights")
-
-analyzeThisModelChoices = ["Entire Model", "VAE", "Text Embeddings", "ControlNet"]
-
-analyzeThisModel = gr.Dropdown(
-    choices = analyzeThisModelChoices,
-    value = analyzeThisModelChoices[0],
-    label = "What kind of model to analyze?"
-)
+"""
+Tools > Video Tools
+"""
 
 # Video Tools
 convertToVideoButton = gr.Button("Convert to video")
@@ -1473,7 +1661,25 @@ videoFileName = gr.Textbox(
     value = "cinema"
 )
 
-## Result(s)
+"""
+Tools > PyTorch Model Analysis
+"""
+
+checkModelButton = gr.Button("Check Model")
+
+analyzeModelWeightsButton = gr.Button("Analyze Model Weights")
+
+analyzeThisModelChoices = ["Entire Model", "VAE", "Text Embeddings", "ControlNet"]
+
+analyzeThisModel = gr.Dropdown(
+    choices = analyzeThisModelChoices,
+    value = analyzeThisModelChoices[0],
+    label = "What kind of model to analyze?"
+)
+
+"""
+Results
+"""
 
 # Gallery for still images
 result = gr.Gallery(
@@ -1597,16 +1803,16 @@ with gr.Blocks(
                     # Use ControlNet and Model Choice
                     with gr.Row():
                         with gr.Column():
-
                             ControlNetGradio.useControlNet.render()
                             ControlNetGradio.controlNetCache.render()
-                            ControlNetGradio.preProcessImage.render()
+                            ControlNetGradio.controlNetStrengthSlider.render()
 
-                        ControlNetGradio.controlNetChoices.render()
-                    
-                    ControlNetGradio.controlNetStrengthSlider.render()
+                        with gr.Column():
+                            ControlNetGradio.controlNetChoices.render()
+                            ControlNetGradio.guessMode.render()
 
                     # ControlNet Input Image and Preview
+                    gr.Markdown("<center>Input Image</center>")
                     with gr.Row():
 
                         ControlNetGradio.controlNetInputImage.render()
@@ -1617,11 +1823,17 @@ with gr.Blocks(
                     # ControlNet Process Option and Preview Button
                     with gr.Row():
                         ControlNetGradio.controlNetProcessingOptions.render()
-
                         ControlNetGradio.controlNetProcessButton.render()
-                    # Canny Edge Options
-                    ControlNetGradio.controlNetThresholdLow.render()
-                    ControlNetGradio.controlNetThresholdHigh.render()
+                    
+                    with gr.Row():
+                        # Canny Edge Options
+                        ControlNetGradio.controlNetThresholdLow.render()
+                        ControlNetGradio.controlNetThresholdHigh.render()
+
+                    with gr.Row():
+                        # Tile Options
+                        ControlNetGradio.controlNetTileSize.render()
+                        ControlNetGradio.controlNetUpscaleMethod.render()
 
             with gr.Tab("Advanced Settings"):
 
@@ -1700,6 +1912,17 @@ with gr.Blocks(
                     yTranslate.render()
             
             with gr.Tab("Tools"):
+                with gr.Tab("Depth Mapping"):
+                    gr.Markdown("<center><b>Create a depth map from an image</b></center>")
+
+                    with gr.Row():
+
+                        DepthMappingGradio.inputImage.render()
+
+                        DepthMappingGradio.outputImage.render()
+
+                    DepthMappingGradio.processImageButton.render()
+
                 with gr.Tab("Prompt Generator"):
                     gr.Markdown("Tools to generate useful prompts")
 
@@ -1746,6 +1969,9 @@ with gr.Blocks(
                     analyzeModelWeightsButton.render()
 
                     analyzeThisModel.render()
+            
+            with gr.Tab("About"):
+                gr.Markdown("<center><b>MetalDiffusion</b><br>Created by AJ Young<br>Designed for Intel Mac's<br>Special Thank you to Divum Gupta")
 
         with gr.Column():
             # Result
@@ -1805,11 +2031,15 @@ with gr.Blocks(
             listOfDevices,
             ControlNetGradio.useControlNet,
             ControlNetGradio.controlNetChoices,
-            ControlNetGradio.preProcessImage,
             ControlNetGradio.controlNetProcessingOptions,
             ControlNetGradio.controlNetInputImage,
+            ControlNetGradio.guessMode,
             ControlNetGradio.controlNetStrengthSlider,
             ControlNetGradio.controlNetCache,
+            ControlNetGradio.controlNetThresholdLow,
+            ControlNetGradio.controlNetThresholdHigh,
+            ControlNetGradio.controlNetTileSize,
+            ControlNetGradio.controlNetUpscaleMethod,
             vPrediction,
             reuseInputForVideo,
             reuseControlNetForVideo
@@ -1845,13 +2075,24 @@ with gr.Blocks(
         outputs = ControlNetGradio.controlNetProcessedImage
     )
     
+    ControlNetGradio.controlNetProcessingOptions.change(
+        fn = switchControlNetOptions,
+        inputs = ControlNetGradio.controlNetProcessingOptions,
+        outputs = [
+            ControlNetGradio.controlNetThresholdLow,
+            ControlNetGradio.controlNetThresholdHigh,
+            ControlNetGradio.controlNetTileSize,
+            ControlNetGradio.controlNetUpscaleMethod
+        ]
+    )
+
     """
     Import
     """
 
     # When import button is pressed
     importPromptButton.click(
-        fn = readWriteFile.readFromFile,
+        fn = readWriteFile.importCreationSettings,
         inputs = importPromptLocation,
         outputs = [
             prompt,
@@ -1878,7 +2119,21 @@ with gr.Blocks(
     )
 
     """
-    Prompt Generator
+    Tools
+    """
+
+    """
+    Tools > Depth Mapping
+    """
+
+    DepthMappingGradio.processImageButton.click(
+        fn = generateDepthMap,
+        inputs = [DepthMappingGradio.inputImage],
+        outputs = DepthMappingGradio.outputImage
+    )
+
+    """
+    Tools > Prompt Generator
     """
 
     # When add prompt is pressed
@@ -1887,10 +2142,6 @@ with gr.Blocks(
         inputs = [prompt, listOfEmbeddings, starterPrompts[0], starterPrompts[1], starterPrompts[2], starterPrompts[3], starterPrompts[4]],
         outputs = [prompt, starterPrompts[0], starterPrompts[1], starterPrompts[2], starterPrompts[3], starterPrompts[4]]
     )
-
-    """
-    Tools
-    """
 
     # Save Model
 
