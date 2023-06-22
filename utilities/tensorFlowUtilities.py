@@ -1,5 +1,6 @@
 import tensorflow as tf
 import subprocess
+import re
 
 def listDevices(
         module = "TensorFlow",
@@ -9,6 +10,7 @@ def listDevices(
     List available GPUs based on the machine learning module, defaults to TensorFlow
     """
     GPUs = []
+                                  
     if module == "TensorFlow" or None:
         GPUs = tf.config.list_physical_devices("GPU")
     
@@ -30,6 +32,12 @@ def listDevices(
             current_gpu['name'] = line.split('Chipset Model:')[1].strip()
         elif 'VRAM' in line:
             current_gpu['vram'] = line.split('VRAM')[1].strip()
+
+            # Slim down VRAM info to just the number, assuming gigabytes
+            VRAMnumber = re.search(r'\d+', current_gpu['vram']).group()
+            VRAMnumber = int(VRAMnumber)
+            current_gpu['vram'] = VRAMnumber
+
         elif 'Vendor:' in line:
             current_gpu['vendor'] = line.split('Vendor:')[1].strip()
         elif 'Device ID:' in line:
@@ -53,6 +61,15 @@ def listDevices(
             print(e)
             gpu['TensorFlow'] = GPUs[0]
         i += 1
+    
+    # Experimental, setting memory limits
+    """try:
+        for gpu in deviceList:
+            #tf.config.experimental.set_memory_growth(gpu, True)
+            tf.config.experimental.set_virtual_device_configuration(gpu['TensorFlow'],
+            [tf.config.experimental.VirtualDeviceConfiguration(memory_limit = 2000)])
+    except RuntimeError as e:
+        print(e)"""
     
     """
     List available CPUs based on the machine learning module, defaults to TensorFlow

@@ -2,6 +2,7 @@ import cv2 #OpenCV
 import os
 import numpy as np
 import tensorflow as tf
+from .tileSetter import tileImage, setTiles
 
 """
 Layers
@@ -39,7 +40,9 @@ def preProcessControlNetImage(
         image,
         processingOption,
         imageSize = [512, 512],
-        cannyOptions = [100, 200]
+        cannyOptions = [100, 200],
+        tileScale = 4,
+        upscaleMethod = "BICUBIC"
 ):
     """
     Pre-Process images for the model
@@ -48,25 +51,51 @@ def preProcessControlNetImage(
     ### Pre-Process the Image ###
     if processingOption == "Canny":
         print("\nPre-Processing image with Canny Detection...")
+        print("Low Threshold:", cannyOptions[0])
+        print("Low Threshold:", cannyOptions[1])
         detectedMap = cv2.Canny(image, cannyOptions[0], cannyOptions[1])
-
+        print("...done!")
     elif processingOption == "HED":
         print("\nPre-Processing image with HED Detection...")
         detectedMap = HEDDetection(image)
+        print("...done!")
+    elif processingOption == "Tile":
+        print("\nPre-Processing image with Tile Setter...")
+        #print("Input Image Size:",image.shape)
+        #print("Input Image kind:",type(image))
+        print("Scale:",tileScale)
+        print("Upscale Method:",upscaleMethod)
+        detectedMap = tileImage(image, scale = tileScale, scaleMethod = upscaleMethod)
+        print("...done!")
     elif processingOption == "BYPASS":
         detectedMap = image
-        print("\nBypassing all controlNet pre-processing...")
-    
-    print("...done!")
+        print("\nNo controlNet pre-processing...")
+    elif processingOption == "None":
+        detectedMap = image
+        print("\nNo controlNet pre-processing...")
 
-    ### Match Image to Render Size ###
-    detectedMap = cv2.resize(detectedMap, (imageSize[0], imageSize[1]))
+    if isinstance(detectedMap, list):
+        #print("\nReceived tiles!")
+        #print("Number of tiles:",len(detectedMap))
+        control = []
+        originalTileSize = detectedMap[0].shape[0]
+        for item in detectedMap:
+            print("Tile shape:",item.shape)
+            resizedItem = cv2.resize(item, (imageSize[0], imageSize[1]))
+            print("Reized tile:", resizedItem.shape)
+            control.append(resizedItem)
+        control.append(originalTileSize)
+        return control
+    else:
 
-    ### Prepare Image as Tensor ###
-    detectedMap = HWC3(detectedMap)
-    control = tf.constant(detectedMap.copy(), dtype=tf.float32) / 255.0
+        ### Match Image to Render Size ###
+        detectedMap = cv2.resize(detectedMap, (imageSize[0], imageSize[1]))
 
-    return [control]
+        ### Prepare Image as Tensor ###
+        detectedMap = HWC3(detectedMap)
+        control = tf.constant(detectedMap.copy(), dtype = tf.float32) / 255.0
+
+        return [control]
 
 
 def previewProcessControlNetImage(
@@ -110,6 +139,10 @@ def HEDDetection(image):
     return output
 
 def HWC3(x):
+    """
+    Height, Width, Chroma (aka, RGB, Red Green Blue).
+    For example:(512, 512, 3)
+    """
     assert x.dtype == np.uint8
     if x.ndim == 2:
         x = x[:, :, None]
@@ -119,7 +152,7 @@ def HWC3(x):
     if C == 3:
         return x
     if C == 1:
-        return np.concatenate([x, x, x], axis=2)
+        return np.concatenate([x, x, x], axis = 2)
     if C == 4:
         color = x[:, :, 0:3].astype(np.float32)
         alpha = x[:, :, 3:4].astype(np.float32) / 255.0
