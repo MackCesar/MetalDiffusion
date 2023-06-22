@@ -64,6 +64,7 @@ from .tools import textEmbeddings as textEmbeddingTools
 
 ### Modules for image building
 from PIL import Image
+import cv2 #OpenCV
 
 ### Sampler modules
 from .samplers import DPMSolverKerasCV as DPMSolver
@@ -81,7 +82,7 @@ class StableDiffusion:
         self,
         imageHeight = 512,
         imageWidth = 512,
-        jit_compile = True,
+        jit_compile = False,
         weights = None,
         legacy = True,
         VAE = "Original",
@@ -328,23 +329,26 @@ class StableDiffusion:
             unconditionalContext = self.encodedNegativePrompt
 
         ### Step 3: Prepare the input image, if it was given
+        ## If given, we're expecting an np.ndarry
         input_image_tensor = None
         if input_image is not None:
-            tf.print("...preparing input image...")
-            if type(input_image) is str:
-                input_image = Image.open(input_image)
-                input_image = input_image.resize((self.imageWidth, self.imageHeight))
 
-            elif type(input_image) is np.ndarray:
+            if isinstance(input_image, np.ndarray):
+                print("Received NumPy Array")
+            
                 input_image = tf.convert_to_tensor(input_image, dtype = tf.float32)
 
                 # Resize the image to self.imageHeight x self.imageWidth
                 input_image = tf.image.resize(input_image, [self.imageHeight, self.imageWidth])
-                
-            # input_image_array = np.array(input_image, dtype = np.float32)[None,...,:3]
-            inputImageArray = tf.constant(input_image, dtype = tf.float32)
-            inputImageArray = tf.expand_dims(input_image[..., :3], axis = 0)
-            input_image_tensor = tf.cast((inputImageArray / 255.0) * 2 - 1, self.dtype)
+
+                inputImageArray = tf.constant(input_image, dtype = tf.float32)
+                inputImageArray = tf.expand_dims(input_image[..., :3], axis = 0)
+                input_image_tensor = tf.cast((inputImageArray / 255.0) * 2 - 1, self.dtype)
+                #displayImage(input_image_tensor, name = "1preppedImage")
+            elif isinstance(input_image, tf.Tensor):
+                print("Received tf.Tensor (TensorFlow Tensor)")
+                input_image_tensor = input_image
+                #displayImage(input_image_tensor, name = "1preppedImage")
         
         ### Step 4: Prepare the image mask, if it was given
         if type(input_mask) is str:
@@ -383,6 +387,7 @@ class StableDiffusion:
                 if type(self.controlNetCache) is dict:
                     if len(self.controlNetCache["unconditional"]) != timesteps:
                         tf.print("Incompatible cache!")
+                        self.controlNetCache = None
                 controlNetParamters = [True, controlNetImage, controlNetStrength, self.controlNetCache]
             else:
                 controlNetParamters = [False, None, 1, None]
@@ -409,7 +414,7 @@ class StableDiffusion:
                 context,
                 unconditionalContext,
                 unconditional_guidance_scale,
-                controlNet = [controlNetParamters[0], controlNetParamters[2], controlNetParamters[3]], # Use Control Net, Strength, Cache
+                controlNet = [controlNetParamters[0], controlNetParamters[2], controlNetParamters[3]], # [0]Use Control Net, [2]Strength, [3]Cache
                 vPrediction = vPrediction
             )
         elif sampler == "DPMSolver":
@@ -921,3 +926,22 @@ def loadWeightsFromSafeTensor(
         
         ## Memory Clean up
         del safeTensorWeights
+
+
+def displayImage(input_image_tensor, name = "image"):
+    # Assuming input_image_tensor is a TensorFlow tensor representing the image
+    # Remove the batch dimension
+    input_image_tensor = tf.squeeze(input_image_tensor, axis = 0)
+
+    # Convert the tensor to a NumPy array
+    input_image_array = input_image_tensor.numpy()
+
+    # Rescale the array to the range [0, 255]
+    input_image_array = ((input_image_array + 1) / 2.0) * 255.0
+
+    # Convert the array to uint8 data type
+    input_image_array = input_image_array.astype('uint8')
+
+    # Display the image using Matplotlib
+    imageFromBatch = Image.fromarray(input_image_array)
+    imageFromBatch.save("shiftFinder/"+name+".png")
