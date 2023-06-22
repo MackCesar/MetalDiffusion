@@ -2,6 +2,10 @@
 import tensorflow as tf
 from tensorflow import keras
 
+### Modules for image building
+from PIL import Image
+import cv2 #OpenCV
+
 class BasicSampler():
     def __init__(
         self,
@@ -83,10 +87,13 @@ class BasicSampler():
         else:
             # Encode the given image
             latent = self.model.encoder(inputImage, training = False)
+            #self.displayImage(latent,"2encoded")
             # Repeat it within the tensor for the given batch size
             latent = tf.repeat(latent , batchSize , axis = 0)
             # Noise the image
             latent = self.addNoise(latent, inputImageNoise_T)
+            #self.displayImage(latent,"3noised")
+            
         
         if controlNetInput is None:
             # Create a random input image from noise
@@ -138,7 +145,8 @@ class BasicSampler():
             tf.print("...using controlNet cache...")
             controlNetCache = controlNet[2]
         else:
-            tf.print("...creating controlNet cache...")
+            if controlNet[0] is True:
+                tf.print("...creating controlNet cache...")
             controlNetCache = []
         
         if controlNet[2] is not None and len(controlNet[2]) != len(list(enumerate(self.timesteps))[::-1]):
@@ -177,12 +185,10 @@ class BasicSampler():
                     )
 
                     # Apply strength
-                    controlNetUnconditionalArray = [result * controlNet[1] for result in controlNetUnconditionalArray]
-                    controlNetConditionalArray = [result * controlNet[1] for result in controlNetConditionalArray]
+                    controlNetUnconditionalArray = [result * scale for result, scale in zip(controlNetUnconditionalArray, controlNet[1])]
+                    controlNetConditionalArray = [result * scale for result, scale in zip(controlNetConditionalArray, controlNet[1])]
 
                     # Update Cache
-                    """controlNetCache["unconditional"].append(controlNetUnconditionalArray)
-                    controlNetCache["conditional"].append(controlNetConditionalArray)"""
                     controlNetCacheData = {
                         "unconditional" : controlNetUnconditionalArray,
                         "conditional" : controlNetConditionalArray
@@ -226,7 +232,7 @@ class BasicSampler():
                     )
             else:
                 # v-Prediction for SD 2.1-V models
-                self.latent = self.predictEpsFromZandV(latentPrevious, timestep, self.latent)
+                self.latent = self.predictEpsFromZandV(latentPrevious, index, self.latent)
 
             # Keras Progress Bar Update
             iteration += 1
@@ -245,11 +251,13 @@ class BasicSampler():
 
         #sqrt_alphas_cumprod = tf.sqrt(tf.math.cumprod([1 - alpha for alpha in self.alphas], axis = 0, exclusive = True))
         sqrt_alphas_cumprod = tf.sqrt(self.alphas)
+        #tf.print("\nSquare Root Alphas Cumprod:\n",len(sqrt_alphas_cumprod))
         tensorShape = sqrt_alphas_cumprod.shape[0]
         # sqrt_alphas_cumprod = sqrt_alphas_cumprod[timestep]
         #sqrt_alphas_cumprod = tf.reshape(sqrt_alphas_cumprod, (tensorShape,) + (1,) * (len(latent.shape) - 1))
 
         sqrt_one_minus_alphas_cumprod = tf.sqrt([1 - alpha for alpha in self.alphas])
+        #tf.print("\nSquare Root Alphas Cumprod Minus One:\n",len(sqrt_one_minus_alphas_cumprod))
         tensorShape = sqrt_one_minus_alphas_cumprod.shape[0]
         # sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timestep]
         #sqrt_one_minus_alphas_cumprod = tf.reshape(sqrt_one_minus_alphas_cumprod, (tensorShape,) + (1,) * (len(latent.shape) - 1))
@@ -304,6 +312,30 @@ class BasicSampler():
         embedding = tf.concat([tf.math.cos(args), tf.math.sin(args)], 0)
         embedding = tf.reshape(embedding, [1, -1])
         return embedding
+    
+    def displayImage(self, image, name = "sampler"):
+        # Assuming input_image_tensor is a TensorFlow tensor representing the image
+
+        input_image_tensor = self.model.decoder(image, training = False)
+
+        # Assuming input_image_tensor is a TensorFlow tensor representing the image
+        # Remove the batch dimension
+        input_image_tensor = tf.squeeze(input_image_tensor, axis = 0)
+
+        #tf.image.resize(input_image_tensor, [self.model.imageWidth, self.model.imageHeight])
+
+        # Convert the tensor to a NumPy array
+        input_image_array = input_image_tensor.numpy()
+
+        # Rescale the array to the range [0, 255]
+        input_image_array = ((input_image_array + 1) / 2.0) * 255.0
+
+        # Convert the array to uint8 data type
+        input_image_array = input_image_array.astype('uint8')
+
+        # Display the image using Matplotlib
+        imageFromBatch = Image.fromarray(input_image_array)
+        imageFromBatch.save("shiftFinder/"+name+".png")
 
 """
 Utilities
