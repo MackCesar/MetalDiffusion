@@ -3,6 +3,7 @@ Pillow
 tensorflow-addons
 tensorflow-macos
 tensorflow-metal
+tensorflow-hub
 ftfy
 regex
 gradio
