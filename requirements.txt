@@ -4,6 +4,7 @@ tensorflow-addons
 tensorflow-macos
 tensorflow-metal
 tensorflow-hub
+jax-metal
 ftfy
 regex
 gradio
