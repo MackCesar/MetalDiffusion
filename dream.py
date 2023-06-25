@@ -744,7 +744,7 @@ class dreamWorld:
                 
                 # Strength of ControlNet
                 self.controlNetGuess = controlNetGuess
-                self.controlNetStrength = controlNetStrength
+                self.controlNetStrength = float(controlNetStrength[0])
 
                 if self.controlNetGuess is True:
                     self.controlNetStrength = [self.controlNetStrength * (0.825 ** float(12 - i)) for i in range(13)]
