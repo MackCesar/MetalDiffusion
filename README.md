@@ -110,8 +110,12 @@ cd /Users/MacUser/MetalDiffusion/
     ```bash
     pip install -r requirements.txt --no-cache-dir
     ```
+5) Run the program:
     
-5) When finished using Stable Diffusion, deactivate the virtual environment:
+    ```bash
+    python dream.py
+    ```
+6) When finished using Stable Diffusion, deactivate the virtual environment:
     
     ```bash
     deactivate
