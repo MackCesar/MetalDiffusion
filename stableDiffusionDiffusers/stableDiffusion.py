@@ -256,8 +256,9 @@ class StableDiffusionDiffusers:
                         torch_dtype = self.dtype,
                         safety_checker = None
                     )
-                    
-                    self.pipeline.enable_model_cpu_offload(gpu_id = self.torchDevice)
+
+                    ## To be fully implemented with HuggingFace updates their code for my request
+                    # self.pipeline.enable_model_cpu_offload(gpu_id = self.torchDevice)
 
                     if self.VAE != None:
                         print("...using",self.VAE,"as VAE...")
