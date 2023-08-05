@@ -11,6 +11,7 @@ gradio
 scikit-image
 psutil
 torch
+torchvision
 opencv-python
 numexpr
 pytorch-lightning
