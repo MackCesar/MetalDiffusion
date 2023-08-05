@@ -1,4 +1,8 @@
-# TensorFlow Modules
+### Basic Modules
+import math
+import random
+
+### TensorFlow Modules
 import tensorflow as tf
 from tensorflow import keras
 
@@ -55,7 +59,10 @@ class BasicSampler():
     ):
         batch_size , w , h = x.shape[0] , x.shape[1] , x.shape[2]
         if noise is None:
+            # Post-Encode version:
             noise = tf.random.normal((batch_size,w,h,4), dtype = DType)
+            # Pre-Encode version:
+            # noise = tf.random.normal((batch_size,w,h,3), dtype = DType)
         sqrt_alpha_prod = self.AlphasCumprod[t] ** 0.5
         sqrt_one_minus_alpha_prod = (1 - self.AlphasCumprod[t]) ** 0.5
 
@@ -80,19 +87,26 @@ class BasicSampler():
 
         if inputImage is None:
             # Create a random input image from noise
-            latent = tf.random.normal(
+            latent = tf.random.stateless_normal(
                 (batchSize, floorDividedImageHeight, floorDividedImageWidth, 4),
-                seed = seed
+                seed = [seed, seed]
             )
         else:
+            ## Debug Variables
+            randomNumber = str(random.randint(0, 2 ** 31))
+
+            # Noise the input image before encoding
+            #latent = self.addNoise(inputImage, inputImageNoise_T)
+
             # Encode the given image
+            print(inputImage.shape)
             latent = self.model.encoder(inputImage, training = False)
-            #self.displayImage(latent,"2encoded")
+            print(latent.shape)
+            #self.displayImage(latent,("encoded" + randomNumber))
             # Repeat it within the tensor for the given batch size
             latent = tf.repeat(latent , batchSize , axis = 0)
-            # Noise the image
+            # Noise the image after encode
             latent = self.addNoise(latent, inputImageNoise_T)
-            #self.displayImage(latent,"3noised")
             
         
         if controlNetInput is None:
@@ -133,114 +147,124 @@ class BasicSampler():
             unconditionalContext,
             unconditionalGuidanceScale,
             controlNet = [None, 1, None], #[0]Use ControlNet, [1]Strength, [2] Cache Input
-            vPrediction = False
+            vPrediction = False,
+            device = None
     ):
+        with tf.device(device):
+            # Progress Bar set-up
+            progbar = tf.keras.utils.Progbar(len(self.timesteps))
+            iteration = 0
 
-        # Progress Bar set-up
-        progbar = tf.keras.utils.Progbar(len(self.timesteps))
-        iteration = 0
-
-        # ControlNet Cache
-        if controlNet[2] is not None:
-            tf.print("...using controlNet cache...")
-            controlNetCache = controlNet[2]
-        else:
-            if controlNet[0] is True:
-                tf.print("...creating controlNet cache...")
-            controlNetCache = []
-        
-        if controlNet[2] is not None and len(controlNet[2]) != len(list(enumerate(self.timesteps))[::-1]):
-            tf.print("...updating controlNet cache...")
-            controlNetCache = []
-            controlNet[2] = None
-
-        tf.print("...sampling:")
-
-        # Iteration loop
-        for index, timestep in list(enumerate(self.timesteps))[::-1]:
-
-            latentPrevious = self.latent
-
-            # Establish timestep embedding
-            #t_emb = self.timestepEmbedding(float(timestep))
-            t_emb = self.timestepEmbedding(int(timestep))
-            t_emb = tf.repeat(t_emb, self.batchSize, axis = 0) #shape is (1, 320)
-
-            inputsConditional = [self.latent, t_emb, context]
-            inputsUnconditional = [self.latent, t_emb, unconditionalContext]
-
-            if controlNet[0] is True:
-
-                if controlNet[2] is None:
-                    # No cache was given, so we're starting from scratch
-
-                    # Get unconditional and conditional tensors(arrays)
-                    controlNetUnconditionalArray = self.model.controlNet(
-                        [self.latent, t_emb, unconditionalContext, tf.concat(self.controlNetInput, axis = 3)],
-                        training = False
-                    )
-                    controlNetConditionalArray = self.model.controlNet(
-                        [self.latent, t_emb, context, tf.concat(self.controlNetInput, axis = 3)],
-                        training = False
-                    )
-
-                    # Apply strength
-                    controlNetUnconditionalArray = [result * scale for result, scale in zip(controlNetUnconditionalArray, controlNet[1])]
-                    controlNetConditionalArray = [result * scale for result, scale in zip(controlNetConditionalArray, controlNet[1])]
-
-                    # Update Cache
-                    controlNetCacheData = {
-                        "unconditional" : controlNetUnconditionalArray,
-                        "conditional" : controlNetConditionalArray
-                        }
-                    controlNetCache.insert(0, controlNetCacheData)
-
-                    # Add the resulting tensors from the contorlNet models to the list of inputs for the diffusion models
-                    inputsUnconditional.append(controlNetUnconditionalArray)
-                    inputsConditional.append(controlNetConditionalArray)
-                else:
-                    # Use ControlNet Cache
-                    inputsUnconditional.extend(controlNetCache[index]["unconditional"])
-                    inputsConditional.extend(controlNetCache[index]["conditional"])
+            # ControlNet Cache
+            if controlNet[2] is not None:
+                tf.print("...using controlNet cache...")
+                controlNetCache = controlNet[2]
+            else:
+                if controlNet[0] is True:
+                    tf.print("...creating controlNet cache...")
+                controlNetCache = []
             
-            # Get unconditional (negative prompt) latent image
-            unconditionalLatent = self.model.diffusion_model(
-                inputsUnconditional,
-                training = False
-            )
+            if controlNet[2] is not None and len(controlNet[2]) != len(list(enumerate(self.timesteps))[::-1]):
+                tf.print("...updating controlNet cache...")
+                controlNetCache = []
+                controlNet[2] = None
 
-            # Get conditional (positive prompt) latent image
-            self.latent = self.model.diffusion_model(
-                inputsConditional,
-                training = False
-            )
+            tf.print("...sampling:")
 
-            # Combine the two latent images
-            self.latent = unconditionalLatent + unconditionalGuidanceScale * (self.latent - unconditionalLatent)
+            # Iteration loop
+            for index, timestep in list(enumerate(self.timesteps))[::-1]:
 
-            # Alphas
-            a_t, a_prev = self.alphas[index], self.alphas_prev[index]
+                latentPrevious = self.latent
 
-            # Predictions
-            if vPrediction is False:
-                pred_x0 = (latentPrevious - tf.sqrt(tf.constant(1.0) - a_t) * self.latent) / tf.sqrt(
-                    a_t
+                # Establish timestep embedding
+                #t_emb = self.timestepEmbedding(float(timestep))
+                t_emb = self.timestepEmbedding(int(timestep))
+                t_emb = tf.repeat(t_emb, self.batchSize, axis = 0) #shape is (1, 320)
+
+                inputsConditional = [self.latent, t_emb, context]
+                inputsUnconditional = [self.latent, t_emb, unconditionalContext]
+
+                if controlNet[0] is True:
+
+                    if controlNet[2] is None:
+                        # No cache was given, so we're starting from scratch
+
+                        # Get unconditional and conditional tensors(arrays)
+                        controlNetUnconditionalArray = self.model.controlNet(
+                            [self.latent, t_emb, unconditionalContext, tf.concat(self.controlNetInput, axis = 3)],
+                            training = False
+                        )
+                        controlNetConditionalArray = self.model.controlNet(
+                            [self.latent, t_emb, context, tf.concat(self.controlNetInput, axis = 3)],
+                            training = False
+                        )
+
+                        # Apply strength
+                        controlNetUnconditionalArray = [result * scale for result, scale in zip(controlNetUnconditionalArray, controlNet[1])]
+                        controlNetConditionalArray = [result * scale for result, scale in zip(controlNetConditionalArray, controlNet[1])]
+
+                        # Update Cache
+                        controlNetCacheData = {
+                            "unconditional" : controlNetUnconditionalArray,
+                            "conditional" : controlNetConditionalArray
+                            }
+                        controlNetCache.insert(0, controlNetCacheData)
+
+                        # Add the resulting tensors from the contorlNet models to the list of inputs for the diffusion models
+                        inputsUnconditional.append(controlNetUnconditionalArray)
+                        inputsConditional.append(controlNetConditionalArray)
+                    else:
+                        # Use ControlNet Cache
+                        inputsUnconditional.extend(controlNetCache[index]["unconditional"])
+                        inputsConditional.extend(controlNetCache[index]["conditional"])
+                
+                # Get unconditional (negative prompt) latent image
+                unconditionalLatent = self.model.diffusion_model(
+                    inputsUnconditional,
+                    training = False
                 )
 
-                self.latent = (
-                    self.latent * tf.sqrt(1.0 - a_prev) + tf.sqrt(a_prev) * pred_x0
+                # Get conditional (positive prompt) latent image
+                self.latent = self.model.diffusion_model(
+                    inputsConditional,
+                    training = False
+                )
+
+                # Combine the two latent images
+                self.latent = unconditionalLatent + unconditionalGuidanceScale * (self.latent - unconditionalLatent)
+
+                # Alphas
+                a_t, a_prev = self.alphas[index], self.alphas_prev[index]
+
+                # Predictions
+                if vPrediction is False:
+                    # Debug Info
+                    if iteration == 0:
+                        print("Latent Previous dtype:",latentPrevious.dtype)
+                        print("Latent dtype:",self.latent.dtype)
+                    
+                    # Make the data types (dtypes) match
+                    if latentPrevious.dtype != self.latent.dtype:
+                        latentPrevious = tf.cast(latentPrevious, dtype = self.latent.dtype)
+                    
+                    pred_x0 = (latentPrevious - math.sqrt(1.0 - a_t) * self.latent) / math.sqrt(
+                        a_t
                     )
-            else:
-                # v-Prediction for SD 2.1-V models
-                self.latent = self.predictEpsFromZandV(latentPrevious, index, self.latent)
 
-            # Keras Progress Bar Update
-            iteration += 1
-            progbar.update(iteration)
+                    self.latent = (
+                        self.latent * math.sqrt(1.0 - a_prev) + math.sqrt(a_prev) * pred_x0
+                    )
+                else:
+                    # v-Prediction for SD 2.1-V models
+                    self.latent = self.predictEpsFromZandV(latentPrevious, index, self.latent)
 
-        tf.print("...finished! Returning latent image...")
+                # Keras Progress Bar Update
+                iteration += 1
+                progbar.update(iteration)
 
-        return self.latent, controlNetCache
+            tf.print("...finished! Returning latent image...")
+
+            return self.latent, controlNetCache
     
     def predictEpsFromZandV(
             self,
@@ -316,7 +340,11 @@ class BasicSampler():
     def displayImage(self, image, name = "sampler"):
         # Assuming input_image_tensor is a TensorFlow tensor representing the image
 
-        input_image_tensor = self.model.decoder(image, training = False)
+        try:
+            input_image_tensor = self.model.decoder(image, training = False)
+        except Exception as e:
+            print(e)
+            input_image_tensor = image
 
         # Assuming input_image_tensor is a TensorFlow tensor representing the image
         # Remove the batch dimension
@@ -335,7 +363,7 @@ class BasicSampler():
 
         # Display the image using Matplotlib
         imageFromBatch = Image.fromarray(input_image_array)
-        imageFromBatch.save("shiftFinder/"+name+".png")
+        imageFromBatch.save("debug/"+name+".png")
 
 """
 Utilities
