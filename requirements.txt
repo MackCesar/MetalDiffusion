@@ -24,3 +24,4 @@ rich
 tqdm
 compel
 tomesd
+accelerate
