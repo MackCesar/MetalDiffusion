@@ -135,6 +135,10 @@ class CLIPAttention(keras.layers.Layer):
         attn_weights = query_states @ keras.layers.Permute((2, 1))(key_states)
 
         attn_weights = tf.reshape(attn_weights, (-1, self.num_heads, tgt_len, src_len))
+        #print("attn_weights dtype:",attn_weights.dtype)
+        #print('casual dtype:',causal_attention_mask.dtype)
+        # Convert the causal_attention_mask tensor to the same data type as attn_weights
+        #causal_attention_mask = tf.cast(causal_attention_mask, dtype=attn_weights.dtype)
         attn_weights = attn_weights + causal_attention_mask
         attn_weights = tf.reshape(attn_weights, (-1, tgt_len, src_len))
 

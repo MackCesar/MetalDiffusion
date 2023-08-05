@@ -9,10 +9,15 @@ import numpy as np
 import random
 
 ### Time modules
-# import datetime
+import datetime
 
 ### Memmory Management
 import gc #Garbage Collector
+
+### Console GUI
+from rich import print, box
+from rich.panel import Panel
+from rich.text import Text
 
 ### Import TensorFlow module
 ### but with supressed warnings to clear up the terminal outputs
@@ -37,6 +42,8 @@ try:
    from keras import backend as K
 except Exception as e:
    print(e)
+
+from tensorflow.keras.optimizers.legacy import Adam
 
 ### Models from Modules
 ## VAE, encode and decode
@@ -89,123 +96,128 @@ class StableDiffusion:
         textEmbeddings = None,
         mixedPrecision = False,
         optimizer = "nadam",
+        device = None,
         controlNet = [False, None] # [0] = Use ControlNet? [1] = ControlNet Weights [2] = Input [3] = Strength
     ):
-        ### Step 1: Establish image dimensions for UNet ###
-        ## requires multiples of 2**7, 2 to the power of 7
-        self.imageHeight = round(imageHeight / 128) * 128
-        self.imageWidth = round(imageWidth / 128) * 128
+        self.device = device
 
-        ### Step 2: Load Text Embeddings ###
-        textEmbeddingTokens = []
-        if textEmbeddings == None:
-            tf.print("\nIgnoring Text Embeddings")
-            self.textEmbeddings = None
-            self.textEmbeddingsTokens = None
-        else:
-            tf.print("\nUsing Text Embeddings")
-            self.textEmbeddings, self.textEmbeddingsTokens = textEmbeddingTools.loadTextEmbedding(textEmbeddings)
+        with tf.device(self.device):
+            ### Step 1: Establish image dimensions for UNet ###
+            ## requires multiples of 2**7, 2 to the power of 7
+            self.imageHeight = round(imageHeight / 128) * 128
+            self.imageWidth = round(imageWidth / 128) * 128
 
-        ### Step 3: Which version of Stable Diffusion ###
+            # Global policy
+            self.dtype = tf.float32 # Default
 
-        self.legacy = legacy
+            # Maaaybe float16 will result in faster images?
+            if mixedPrecision is True:
+                self.changePolicy("mixed_float16")
 
-        ### Step 4: Create Tokenizer ###
-        if self.legacy is True:
-            if self.textEmbeddings is None:
-                # If no textEmbeddings were given, we're not adding to the special tokens list in the tokenizer
-                self.tokenizer = LegacySimpleTokenizer()
+            ### Step 2: Load Text Embeddings ###
+            textEmbeddingTokens = []
+            if textEmbeddings == None:
+                tf.print("\nIgnoring Text Embeddings")
+                self.textEmbeddings = None
+                self.textEmbeddingsTokens = None
             else:
-                self.tokenizer = LegacySimpleTokenizer(specialTokens = self.textEmbeddingsTokens)
-        else:
-            if self.textEmbeddings is None:
-                self.tokenizer = SimpleTokenizer()
+                tf.print("\nUsing Text Embeddings")
+                self.textEmbeddings, self.textEmbeddingsTokens = textEmbeddingTools.loadTextEmbedding(textEmbeddings)
+
+            ### Step 3: Which version of Stable Diffusion ###
+
+            self.legacy = legacy
+
+            ### Step 4: Create Tokenizer ###
+            if self.legacy is True:
+                if self.textEmbeddings is None:
+                    # If no textEmbeddings were given, we're not adding to the special tokens list in the tokenizer
+                    self.tokenizer = LegacySimpleTokenizer()
+                else:
+                    self.tokenizer = LegacySimpleTokenizer(specialTokens = self.textEmbeddingsTokens)
             else:
-                self.tokenizer = SimpleTokenizer(specialTokens = self.textEmbeddingsTokens)
+                if self.textEmbeddings is None:
+                    self.tokenizer = SimpleTokenizer()
+                else:
+                    self.tokenizer = SimpleTokenizer(specialTokens = self.textEmbeddingsTokens)
 
-        ### Step 5: Create Models ###
-        """
-        We need to create empty models before we can compile them with
-        the weights of the trained models.
-        First, let's check for pytorch weights. If given, we will load them later.
-        If not, then we're loading in a pre-compiled model OR weights made for TensorFlow
-        """
-        
-        ## Step 5.1: Create weightless models ##
-        if controlNet[0] == True:
-            tf.print("\nUsing ControlNet",controlNet[1])
-        
-        text_encoder, diffusion_model, decoder, encoder, control_net = CreateModels(
-            self.imageHeight,
-            self.imageWidth,
-            preCompiled = None, # If not None, then we're passing on Keras weights ".h5"
-            legacy = legacy,
-            addedTokens = self.textEmbeddings,
-            useControlNet = [controlNet[0]]
-        )
-        
-        ## Step 5.2 Create object/class variables that point to the compiled models
-        self.text_encoder = text_encoder
-        self.diffusion_model = diffusion_model
-        self.decoder = decoder
-        self.encoder = encoder
-        self.controlNet = control_net
-
-        ## Step 5.4: Load Weights
-            # NOTE: must be done after creating models
-        self.weights = weights
-
-        self.setWeights(weights, VAE)
-        
-        ### Step 6: Load Text Embedding Weights ###
-        if self.textEmbeddings is not None:
-            if legacy is True:
-                CLIP = CLIPTextTransformer
-            else:
-                CLIP = OpenCLIPTextTransformer
-            self.text_encoder = textEmbeddingTools.loadTextEmbeddingWeight(
-                textEncoder = text_encoder,
-                CLIP = CLIP,
-                maxTextLength = MAX_TEXT_LEN,
-                embeddings = self.textEmbeddings,
-                legacy = legacy
+            ### Step 5: Create Models ###
+            """
+            We need to create empty models before we can compile them with
+            the weights of the trained models.
+            First, let's check for pytorch weights. If given, we will load them later.
+            If not, then we're loading in a pre-compiled model OR weights made for TensorFlow
+            """
+            
+            ## Step 5.1: Create weightless models ##
+            if controlNet[0] == True:
+                tf.print("\nUsing ControlNet",controlNet[1])
+            
+            text_encoder, diffusion_model, decoder, encoder, control_net = CreateModels(
+                self.imageHeight,
+                self.imageWidth,
+                preCompiled = None, # If not None, then we're passing on Keras weights ".h5"
+                legacy = legacy,
+                addedTokens = self.textEmbeddings,
+                useControlNet = [controlNet[0]],
+                device = self.device
             )
-        
-        ### Step 7: Load ControlNet Weights ###
-        if controlNet[0] == True:
-            if ".safetensors" in controlNet[1]:
-                loadWeightsFromSafeTensor(
-                    self,
-                    controlNet[1], # Which weights to load, in this case maybe all four models
-                    legacy, # Which version of Stable Diffusion
-                    ['controlNet'] # Which specific Models to load
+            
+            ## Step 5.2 Create object/class variables that point to the compiled models
+            self.text_encoder = text_encoder
+            self.diffusion_model = diffusion_model
+            self.decoder = decoder
+            self.encoder = encoder
+            self.controlNet = control_net
+
+            ## Step 5.4: Load Weights
+                # NOTE: must be done after creating models
+            self.weights = weights
+
+            self.setWeights(weights, VAE)
+            
+            ### Step 6: Load Text Embedding Weights ###
+            if self.textEmbeddings is not None:
+                if legacy is True:
+                    CLIP = CLIPTextTransformer
+                else:
+                    CLIP = OpenCLIPTextTransformer
+                self.text_encoder = textEmbeddingTools.loadTextEmbeddingWeight(
+                    textEncoder = text_encoder,
+                    CLIP = CLIP,
+                    maxTextLength = MAX_TEXT_LEN,
+                    embeddings = self.textEmbeddings,
+                    legacy = legacy
                 )
-            elif ".pth" in controlNet[1]:
-                loadWeightsFromPytorchCKPT(
-                    self,
-                    controlNet[1], # Which weights to load, in this case maybe all four models
-                    legacy, # Which version of Stable Diffusion
-                    ['controlNet'] # Which specific Models to load
-                )
+            
+            ### Step 7: Load ControlNet Weights ###
+            if controlNet[0] == True:
+                if ".safetensors" in controlNet[1]:
+                    loadWeightsFromSafeTensor(
+                        self,
+                        controlNet[1], # Which weights to load, in this case maybe all four models
+                        legacy, # Which version of Stable Diffusion
+                        ['controlNet'] # Which specific Models to load
+                    )
+                elif ".pth" in controlNet[1]:
+                    loadWeightsFromPytorchCKPT(
+                        self,
+                        controlNet[1], # Which weights to load, in this case maybe all four models
+                        legacy, # Which version of Stable Diffusion
+                        ['controlNet'] # Which specific Models to load
+                    )
 
-        ### Step 8: Compile Models ###
-        self.jitCompile = jit_compile
-        self.compileModels(optimizer, self.jitCompile)
-        
-        # Global policy
-        self.dtype = tf.float32 # Default
+            ### Step 8: Compile Models ###
+            self.jitCompile = jit_compile
+            self.compileModels(optimizer, self.jitCompile)
 
-        # Maaaybe float16 will result in faster images?
-        if mixedPrecision is True:
-            self.changePolicy("mixed_float16")
-
-        ## Cache
-        self.prompt = None
-        self.negativePrompt = None
-        self.encodedPrompt = None
-        self.encodedNegativePrompt = None
-        self.batch_size = None
-        self.controlNetCache = None
+            ## Cache
+            self.prompt = None
+            self.negativePrompt = None
+            self.encodedPrompt = None
+            self.encodedNegativePrompt = None
+            self.batch_size = None
+            self.controlNetCache = None
 
     def compileModels(
             self,
@@ -215,15 +227,17 @@ class StableDiffusion:
         modules = ['text_encoder', 'diffusion_model', 'decoder', 'encoder' ]
 
         if jitCompile is True:
-            tf.print("\nCompiling models with XLA (Accelerated Linear Algebra)")
+            tf.print("\nCompiling models with XLA (Accelerated Linear Algebra):")
         else:
             tf.print("\nCompiling models")
 
-        for module in modules:
-            getattr(self, module).compile(
-                optimizer = optimizer,
-                jit_compile = jitCompile
-            )
+        with tf.device(self.device):
+            for module in modules:
+                getattr(self, module).compile(
+                    optimizer = Adam(),
+                    jit_compile = jitCompile
+                )
+                print(module,"compiled.")
         
     """
     Generate and image, the key function
@@ -246,221 +260,232 @@ class StableDiffusion:
         controlNetCache = False,
         vPrediction = False
     ):
-        ## Memory Efficiency
-        # Clear up tensorflow memory
-        tf.print("\n...cleaning memory...")
-        tf.keras.backend.clear_session()
-        gc.collect()
+        with tf.device(self.device):
+            ## Memory Efficiency
+            # Clear up tensorflow memory
+            tf.print("\n...cleaning memory...")
+            tf.keras.backend.clear_session()
+            gc.collect()
 
-        tf.print("...getting to work...")
+            tf.print("...getting to work...")
 
-        ### Step 1: Cache Prompts
-        if self.prompt != prompt: # New prompt?
-            # Create prompt cache
-            self.prompt = prompt
-            self.encodedPrompt = None
-        
-        if self.negativePrompt != negativePrompt: # New negative prompt?
-            # Create negative prompt cache
-            self.negativePrompt = negativePrompt
-            self.encodedNegativePrompt = None
-        
-        if self.batch_size != batch_size: # New batch size?
-            # clear prompt caches if batch_size has changed
-            self.encodedPrompt = None
-            self.encodedNegativePrompt = None
-            self.batch_size = batch_size
-        
-        ### Step 2: Tokenize prompts
-            # the tokenized prompts are AKA "starting context"
-            # we'll also tokenize the negative prompt, the "unconditional context"
-
-        if self.encodedPrompt is None:
-            # No cached encoded prompt exists
-            tf.print("\n...tokenizing prompt...")
+            ### Step 1: Cache Prompts
+            if self.prompt != prompt: # New prompt?
+                # Create prompt cache
+                self.prompt = prompt
+                self.encodedPrompt = None
             
-            if self.textEmbeddings is not None:
-                tf.print("...checking for text embeddings...")
-                prompt = textEmbeddingTools.injectTokens(
-                    prompt = prompt,
-                    embeddings = self.textEmbeddings
+            if self.negativePrompt != negativePrompt: # New negative prompt?
+                # Create negative prompt cache
+                self.negativePrompt = negativePrompt
+                self.encodedNegativePrompt = None
+            
+            if self.batch_size != batch_size: # New batch size?
+                # clear prompt caches if batch_size has changed
+                self.encodedPrompt = None
+                self.encodedNegativePrompt = None
+                self.batch_size = batch_size
+            
+            ### Step 2: Tokenize prompts
+                # the tokenized prompts are AKA "starting context"
+                # we'll also tokenize the negative prompt, the "unconditional context"
+
+            if self.encodedPrompt is None:
+                # No cached encoded prompt exists
+                tf.print("\n...tokenizing prompt...")
+                
+                if self.textEmbeddings is not None:
+                    tf.print("...checking for text embeddings...")
+                    prompt = textEmbeddingTools.injectTokens(
+                        prompt = prompt,
+                        embeddings = self.textEmbeddings
+                    )
+
+                phrase, pos_ids = self.encodeText(prompt, batch_size, self.legacy)
+
+                tf.print("...encoding the tokenized prompt...")
+                context = self.text_encoder(
+                    [phrase, pos_ids],
+                    training = False
                 )
 
-            phrase, pos_ids = self.encodeText(prompt, batch_size, self.legacy)
-
-            tf.print("...encoding the tokenized prompt...")
-            context = self.text_encoder(
-                [phrase, pos_ids],
-                training = False
-            )
-
-            # Cache encoded prompt
-            self.encodedPrompt = context
-        else:
-            # Load cached encoded prompt
-            tf.print("...using cached encoded prompt...")
-            context = self.encodedPrompt
-        
-        if self.encodedNegativePrompt is None:
-            tf.print("...tokenizing negative prompt...")
-            if negativePrompt is None:
-                # Encoding text requires a string variable
-                negativePrompt = ""
-            
-            if self.textEmbeddings is not None:
-                tf.print("...checking for text embeddings...")
-                negativePrompt = textEmbeddingTools.injectTokens(
-                    prompt = negativePrompt,
-                    embeddings = self.textEmbeddings
-                )
-            
-            unconditional_tokens, pos_ids = self.encodeText(negativePrompt, batch_size, self.legacy)
-            
-            tf.print("...encoding the tokenized negative prompt...")
-            unconditionalContext = self.text_encoder(
-                [unconditional_tokens, pos_ids],
-                training = False
-            )
-
-            # Cache encoded negative prompt
-            self.encodedNegativePrompt = unconditionalContext
-        else:
-            tf.print("...using cached encoded negative prompt...")
-            unconditionalContext = self.encodedNegativePrompt
-
-        ### Step 3: Prepare the input image, if it was given
-        ## If given, we're expecting an np.ndarry
-        input_image_tensor = None
-        if input_image is not None:
-
-            if isinstance(input_image, np.ndarray):
-                print("Received NumPy Array")
-            
-                input_image = tf.convert_to_tensor(input_image, dtype = tf.float32)
-
-                # Resize the image to self.imageHeight x self.imageWidth
-                input_image = tf.image.resize(input_image, [self.imageHeight, self.imageWidth])
-
-                inputImageArray = tf.constant(input_image, dtype = tf.float32)
-                inputImageArray = tf.expand_dims(input_image[..., :3], axis = 0)
-                input_image_tensor = tf.cast((inputImageArray / 255.0) * 2 - 1, self.dtype)
-                #displayImage(input_image_tensor, name = "1preppedImage")
-            elif isinstance(input_image, tf.Tensor):
-                print("Received tf.Tensor (TensorFlow Tensor)")
-                input_image_tensor = input_image
-                #displayImage(input_image_tensor, name = "1preppedImage")
-        
-        ### Step 4: Prepare the image mask, if it was given
-        if type(input_mask) is str:
-            print("...preparing input mask...")
-            input_mask = Image.open(input_mask)
-            input_mask = input_mask.resize((self.imageWidth, self.imageHeight))
-            input_mask_array = np.array(input_mask, dtype = np.float32)[None,...,None]
-            input_mask_array =  input_mask_array / 255.0
-            
-            latent_mask = input_mask.resize((self.imageWidth // 8, self.imageHeight // 8))
-            latent_mask = np.array(latent_mask, dtype = np.float32)[None,...,None]
-            latent_mask = 1 - (latent_mask.astype("float") / 255.0)
-            latent_mask_tensor = tf.cast(tf.repeat(latent_mask, batch_size , axis = 0), self.dtype)
-        else:
-            latent_mask_tensor = None
-
-        ### Step 5: Create a random seed if one is not provided
-        if seed is None:
-            tf.print("...generating random seed...")
-            seed = random.randint(1000, sys.maxsize)
-
-        ### Step 6: Create time steps
-        tf.print("...creating time steps...")
-        timesteps = tf.range(1, 1000, 1000 // num_steps)
-
-        ### Step 7: Load Sampler and:
-        ### Step 8: Start Diffusion
-        if sampler is None or sampler == "Basic":
-            if sampler is None: tf.print("...no sampler given...")
-
-            # ControlNet
-            # Parameters: [0]Use ControlNet, [1] Input Image, [2]Strength, [3] Cache Input
-            if self.controlNet is not None:
-                if controlNetCache is False:
-                    self.controlNetCache = None
-                if type(self.controlNetCache) is dict:
-                    if len(self.controlNetCache["unconditional"]) != timesteps:
-                        tf.print("Incompatible cache!")
-                        self.controlNetCache = None
-                controlNetParamters = [True, controlNetImage, controlNetStrength, self.controlNetCache]
+                # Cache encoded prompt
+                self.encodedPrompt = context
             else:
-                controlNetParamters = [False, None, 1, None]
+                # Load cached encoded prompt
+                tf.print("...using cached encoded prompt...")
+                context = self.encodedPrompt
             
-            # Create Sampler
-            sampler = BasicSampler(
-                model = self,
-                timesteps = timesteps,
-                batchSize = batch_size,
-                seed = seed,
-                inputImage = input_image_tensor,
-                inputMask = latent_mask_tensor,
-                inputImageStrength = input_image_strength,
-                temperature = temperature,
-                AlphasCumprod = _ALPHAS_CUMPROD,
-                controlNetInput = controlNetParamters[1] # Input Image, assuming pre-processed
+            if self.encodedNegativePrompt is None:
+                tf.print("...tokenizing negative prompt...")
+                if negativePrompt is None:
+                    # Encoding text requires a string variable
+                    negativePrompt = ""
+                
+                if self.textEmbeddings is not None:
+                    tf.print("...checking for text embeddings...")
+                    negativePrompt = textEmbeddingTools.injectTokens(
+                        prompt = negativePrompt,
+                        embeddings = self.textEmbeddings
+                    )
+                
+                unconditional_tokens, pos_ids = self.encodeText(negativePrompt, batch_size, self.legacy)
+                
+                tf.print("...encoding the tokenized negative prompt...")
+                unconditionalContext = self.text_encoder(
+                    [unconditional_tokens, pos_ids],
+                    training = False
+                )
+
+                # Cache encoded negative prompt
+                self.encodedNegativePrompt = unconditionalContext
+            else:
+                tf.print("...using cached encoded negative prompt...")
+                unconditionalContext = self.encodedNegativePrompt
+
+            ### Step 3: Prepare the input image, if it was given
+            ## If given, we're expecting an np.ndarry
+            input_image_tensor = None
+            if input_image is not None:
+
+                if isinstance(input_image, np.ndarray):
+                    print("...received NumPy Array...")
+                    print(input_image.shape)
+                
+                    input_image = tf.convert_to_tensor(input_image, dtype = tf.float32)
+
+                    # Resize the image to self.imageHeight x self.imageWidth
+                    input_image = tf.image.resize(input_image, [self.imageHeight, self.imageWidth])
+
+                    inputImageArray = tf.constant(input_image, dtype = tf.float32)
+                    inputImageArray = tf.expand_dims(input_image[..., :3], axis = 0)
+                    input_image_tensor = tf.cast((inputImageArray / 255.0) * 2 - 1, self.dtype)
+
+                    print(input_image_tensor.shape)
+                    #displayImage(input_image_tensor, name = "1preppedImage")
+                elif isinstance(input_image, tf.Tensor):
+                    print("...received tf.Tensor (TensorFlow Tensor)...")
+                    input_image_tensor = input_image
+                    #displayImage(input_image_tensor, name = "1preppedImage")
+            
+            ### Step 4: Prepare the image mask, if it was given
+            if type(input_mask) is str:
+                print("...preparing input mask...")
+                input_mask = Image.open(input_mask)
+                input_mask = input_mask.resize((self.imageWidth, self.imageHeight))
+                input_mask_array = np.array(input_mask, dtype = np.float32)[None,...,None]
+                input_mask_array =  input_mask_array / 255.0
+                
+                latent_mask = input_mask.resize((self.imageWidth // 8, self.imageHeight // 8))
+                latent_mask = np.array(latent_mask, dtype = np.float32)[None,...,None]
+                latent_mask = 1 - (latent_mask.astype("float") / 255.0)
+                latent_mask_tensor = tf.cast(tf.repeat(latent_mask, batch_size , axis = 0), self.dtype)
+            else:
+                latent_mask_tensor = None
+
+            ### Step 5: Create a random seed if one is not provided
+            if seed is None:
+                tf.print("...generating random seed...")
+                seed = random.randint(1000, sys.maxsize)
+                seed = int(seed)
+            else:
+                seed = int(seed)
+
+            ### Step 6: Create time steps
+            tf.print("...creating time steps...")
+            timesteps = tf.range(1, 1000, 1000 // num_steps)
+
+            ### Step 7: Load Sampler and:
+            ### Step 8: Start Diffusion
+            if sampler == "DPMSolver":
+                tf.print("...using DPM Solver...\n...starting sampler...")
+
+                alphasCumprod = tf.constant(_ALPHAS_CUMPROD)
+
+                noiseScheduler = DPMSolver.NoiseScheduler(
+                    beta_schedule = "scaled_linear"
+                )
+
+                print("...starting diffusion...\n...this solver not supported yet!\nDividing by zero now:\n")
+
+                x = 5 / 0
+            else:
+                if sampler is None: tf.print("...no sampler given...")
+
+                # ControlNet
+                # Parameters: [0]Use ControlNet, [1] Input Image, [2]Strength, [3] Cache Input
+                if self.controlNet is not None:
+                    controlNetImage = [tf.constant(controlNetImage[0].copy(), dtype = tf.float32) / 255.0]
+                    if controlNetCache is False:
+                        self.controlNetCache = None
+                    if type(self.controlNetCache) is dict:
+                        if len(self.controlNetCache["unconditional"]) != timesteps:
+                            tf.print("Incompatible cache!")
+                            self.controlNetCache = None
+                    controlNetParamters = [True, controlNetImage, controlNetStrength, self.controlNetCache]
+                else:
+                    controlNetParamters = [False, None, 1, None]
+                
+                # Create Sampler
+                sampler = BasicSampler(
+                    model = self,
+                    timesteps = timesteps,
+                    batchSize = batch_size,
+                    seed = seed,
+                    inputImage = input_image_tensor,
+                    inputMask = latent_mask_tensor,
+                    inputImageStrength = input_image_strength,
+                    temperature = temperature,
+                    AlphasCumprod = _ALPHAS_CUMPROD,
+                    controlNetInput = controlNetParamters[1] # Input Image, assuming pre-processed
+                )
+
+                if vPrediction is True:
+                    tf.print("...using v-prediction...")
+
+                # Sample, create image essentially
+                latentImage, self.controlNetCache = sampler.sample(
+                    context,
+                    unconditionalContext,
+                    unconditional_guidance_scale,
+                    controlNet = [controlNetParamters[0], controlNetParamters[2], controlNetParamters[3]], # [0]Use Control Net, [2]Strength, [3]Cache
+                    vPrediction = vPrediction,
+                    device = self.device
+                )
+
+            ### Step 9: Decoding stage
+            tf.print("\n...decoding latent image...")
+            decoded = self.decoder(
+                latentImage,
+                training = False
             )
+            decoded = ((decoded + 1) / 2) * 255
 
-            if vPrediction is True:
-                tf.print("...using v-prediction...")
+            ### Step 10: Merge inpainting result of input mask with original image
+            if input_mask is not None:
+                decoded = inputImageArray * (1-input_mask_array) + np.array(decoded) * input_mask_array
+            
+            ### Memory cleanup
+            gc.collect()
 
-            # Sample, create image essentially
-            latentImage, self.controlNetCache = sampler.sample(
-                context,
-                unconditionalContext,
-                unconditional_guidance_scale,
-                controlNet = [controlNetParamters[0], controlNetParamters[2], controlNetParamters[3]], # [0]Use Control Net, [2]Strength, [3]Cache
-                vPrediction = vPrediction
-            )
-        elif sampler == "DPMSolver":
-            tf.print("...using DPM Solver...\n...starting sampler...")
-
-            alphasCumprod = tf.constant(_ALPHAS_CUMPROD)
-
-            noiseScheduler = DPMSolver.NoiseScheduler(
-                beta_schedule = "scaled_linear"
-            )
-
-            print("...starting diffusion...\n...this solver not supported yet!\nDividing by zero now:\n")
-
-            x = 5 / 0
-
-        ### Step 9: Decoding stage
-        tf.print("\n...decoding latent image...")
-        decoded = self.decoder(
-            latentImage,
-            training = False
-        )
-        decoded = ((decoded + 1) / 2) * 255
-
-        ### Step 10: Merge inpainting result of input mask with original image
-        if input_mask is not None:
-            decoded = inputImageArray * (1-input_mask_array) + np.array(decoded) * input_mask_array
-        
-        ### Memory cleanup
-        gc.collect()
-
-        ### Step 11: return final image as an array
-        return np.clip(decoded, 0, 255).astype("uint8")
+            ### Step 11: return final image as an array
+            return np.clip(decoded, 0, 255).astype("uint8")
     
     def changePolicy(self, policy):
 
         if policy == "mixed_float16":
-            print("\n...using mixed precision...")
-            self.dtype = tf.float16
+            #self.dtype = tf.float16
             if tf.keras.mixed_precision.global_policy().name != 'mixed_float16':
+                print("\n...using mixed precision...")
                 tf.keras.mixed_precision.set_global_policy('mixed_float16')
+                #self.dtype = tf.float16
         
         if policy == "float32":
-            print("\n...using regular precision...")
-            self.dtype = tf.float32
+            #self.dtype = tf.float32
             if tf.keras.mixed_precision.global_policy().name != 'float32':
+                print("\n...using regular precision...")
                 tf.keras.mixed_precision.set_global_policy('float32')
+                #self.dtype = tf.float32
     
     def encodeText(
             self,
@@ -469,45 +494,59 @@ class StableDiffusion:
             legacy
     ):
         TextLimit = MAX_TEXT_LEN - 1
-        if legacy is True:
-            # First, encode the prompt
-            inputs = self.tokenizer.encode(prompt)
-            # Then check the inputs length and truncate if too long
-            if len(inputs) > TextLimit:
-                tf.print("Prompt is too long (should be less than 77 words). Truncating down to 77 words...")
-                inputs = inputs[:TextLimit]
-            
-            # Create numpy array with the inputs
-            phrase = [49406] + inputs + [49407] * (TextLimit - len(inputs))
-            phrase = np.array(phrase)[None].astype("int32")
-            phrase = np.repeat(phrase, batch_size, axis = 0)
+        with tf.device(self.device):
+            if legacy is True:
+                # First, encode the prompt
+                inputs = self.tokenizer.encode(prompt)
+                # Then check the inputs length and truncate if too long
+                if len(inputs) > TextLimit:
+                    tf.print("Prompt is too long (should be less than 77 words). Truncating down to 77 words...")
+                    inputs = inputs[:TextLimit]
+                
+                """## Create numpy array with the inputs
+                # Phrase - aka the prompt
+                phrase = [49406] + inputs + [49407] * (TextLimit - len(inputs))
+                phrase = np.array(phrase)[None].astype("int32")
+                phrase = np.repeat(phrase, batch_size, axis = 0)
 
-            pos_ids = np.array(list(range(77)))[None].astype("int32")
-            pos_ids = np.repeat(pos_ids, batch_size, axis = 0)
-        else:
-            # First, encode the prompt
-            TextLimit += 1
-            if isinstance(prompt, str):
-                inputs = [prompt]
-            # Then tokenize the prompt
-            startOfToken = self.tokenizer.encoder["<start_of_text>"]
-            endOfToken = self.tokenizer.encoder["<end_of_text>"]
-            allTokens = [[startOfToken] + self.tokenizer.encode(input) + [endOfToken] for input in inputs]
-            # Create the empty tensor/numpy array to load the tokens into
-            phrase = np.zeros((len(allTokens), TextLimit), dtype = np.int32)
+                # Position ID
+                pos_ids = np.array(list(range(77)))[None].astype("int32")
+                pos_ids = np.repeat(pos_ids, batch_size, axis = 0)"""
 
-            for i, tokens in enumerate(allTokens):
-                if len(tokens) > TextLimit:
-                    tokens = tokens[:TextLimit]  # Truncate
-                    tokens[-1] = endOfToken
-                phrase[i, :len(tokens)] = np.array(tokens)
+                # Phrase - aka the prompt
+                phrase = tf.concat([[49406], inputs, [49407] * (TextLimit - len(inputs))], axis=0)
+                phrase = tf.expand_dims(phrase, axis=0)
+                phrase = tf.repeat(phrase, batch_size, axis=0)
+                phrase = tf.cast(phrase, dtype=tf.int32)
 
-            phrase = np.repeat(phrase, batch_size, axis = 0)
+                # Position ID
+                pos_ids = tf.expand_dims(tf.range(77), axis=0)
+                pos_ids = tf.repeat(pos_ids, batch_size, axis=0)
+                pos_ids = tf.cast(pos_ids, dtype=tf.int32)
+            else:
+                # First, encode the prompt
+                TextLimit += 1
+                if isinstance(prompt, str):
+                    inputs = [prompt]
+                # Then tokenize the prompt
+                startOfToken = self.tokenizer.encoder["<start_of_text>"]
+                endOfToken = self.tokenizer.encoder["<end_of_text>"]
+                allTokens = [[startOfToken] + self.tokenizer.encode(input) + [endOfToken] for input in inputs]
+                # Create the empty tensor/numpy array to load the tokens into
+                phrase = np.zeros((len(allTokens), TextLimit), dtype = np.int32)
 
-            pos_ids = np.array(list(range(TextLimit)))[None].astype("int32")
-            pos_ids = np.repeat(pos_ids, batch_size, axis = 0)
+                for i, tokens in enumerate(allTokens):
+                    if len(tokens) > TextLimit:
+                        tokens = tokens[:TextLimit]  # Truncate
+                        tokens[-1] = endOfToken
+                    phrase[i, :len(tokens)] = np.array(tokens)
 
-        return phrase, pos_ids
+                phrase = np.repeat(phrase, batch_size, axis = 0)
+
+                pos_ids = np.array(list(range(TextLimit)))[None].astype("int32")
+                pos_ids = np.repeat(pos_ids, batch_size, axis = 0)
+
+            return phrase, pos_ids
     
     def setWeights(self, weights, VAE = "Original"):
         self.weights = weights
@@ -581,102 +620,104 @@ def CreateModels(
     preCompiled = None,
     legacy = True,
     addedTokens = 0,
-    useControlNet = [False]
+    useControlNet = [False],
+    device = None
 ):
-    # Memory Clean up
-    tf.keras.backend.clear_session()
-    gc.collect()
+    with tf.device(device):
+        # Memory Clean up
+        tf.keras.backend.clear_session()
+        gc.collect()
 
-    controlNet = None
+        controlNet = None
 
-    if legacy is True:
-        # Are we using Pre-Stable Diffusion 2.0?
+        if legacy is True:
+            # Are we using Pre-Stable Diffusion 2.0?
 
-        tf.print("\nCreating models in legacy mode...")
+            tf.print("\nCreating models in legacy mode...")
 
-        # Create Text Encoder model
-        input_word_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
-        input_pos_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
-        embeds = CLIPTextTransformer()([input_word_ids, input_pos_ids])
-        text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
-        tf.print("Created text encoder model")
+            # Create Text Encoder model
+            input_word_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
+            input_pos_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
+            embeds = CLIPTextTransformer()([input_word_ids, input_pos_ids])
+            text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
+            tf.print("Created text encoder model")
 
-        if useControlNet[0] is False:
-            # Create Diffusion model
-            diffusion_model = DiffusionModel(
-                imageHeight,
-                imageWidth,
-                MAX_TEXT_LEN
+            if useControlNet[0] is False:
+                # Create Diffusion model
+                diffusion_model = DiffusionModel(
+                    imageHeight,
+                    imageWidth,
+                    MAX_TEXT_LEN
+                )
+                tf.print("Created diffusion model")
+            else:
+                # Create seperate control net model
+                controlNet = ControlNetModel(
+                    imageHeight,
+                    imageWidth,
+                    MAX_TEXT_LEN
+                )
+
+                tf.print("Created ControlNet Model")
+
+                # Create Diffusion model
+                diffusion_model = ControlDiffusionModel(
+                    imageHeight,
+                    imageWidth,
+                    MAX_TEXT_LEN
+                )
+                tf.print("Created diffusion model")
+
+            # Create Decoder model
+            decoder = Decoder(
+                img_height = imageHeight,
+                img_width = imageWidth,                
             )
-            tf.print("Created diffusion model")
+            tf.print("Created decoder model")
+
+            # Create Image Encoder model
+            encoder = ImageEncoder(
+                img_height = imageHeight,
+                img_width = imageWidth
+            )
+            tf.print("Created encoder model")
+
         else:
-            # Create seperate control net model
-            controlNet = ControlNetModel(
-                imageHeight,
-                imageWidth,
-                MAX_TEXT_LEN
-            )
+            # We're using SD 2.0 and newer
 
-            tf.print("Created ControlNet Model")
+            print("\nCreating models in contemporary mode...")
+
+            # Create Text Encoder model
+            input_word_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
+            input_pos_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
+            embeds = OpenCLIPTextTransformer()([input_word_ids, input_pos_ids])
+            text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
+            print("Created text encoder model")
 
             # Create Diffusion model
-            diffusion_model = ControlDiffusionModel(
+            diffusion_model = DiffusionModelV2(
                 imageHeight,
                 imageWidth,
                 MAX_TEXT_LEN
             )
-            tf.print("Created diffusion model")
+            print("Created diffusion model")
 
-        # Create Decoder model
-        decoder = Decoder(
-            img_height = imageHeight,
-            img_width = imageWidth,                
-        )
-        tf.print("Created decoder model")
+            # Create Decoder model
+            decoder = Decoder(
+                img_height = imageHeight,
+                img_width = imageWidth,                
+            )
+            print("Created decoder model")
 
-        # Create Image Encoder model
-        encoder = ImageEncoder(
-            img_height = imageHeight,
-            img_width = imageWidth
-        )
-        tf.print("Created encoder model")
+            # Create Image Encoder model
+            encoder = ImageEncoder(
+                img_height = imageHeight,
+                img_width = imageWidth
+            )
+            print("Created encoder model")
 
-    else:
-        # We're using SD 2.0 and newer
-
-        print("\nCreating models in contemporary mode...")
-
-        # Create Text Encoder model
-        input_word_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
-        input_pos_ids = keras.layers.Input(shape = (MAX_TEXT_LEN,), dtype = "int32")
-        embeds = OpenCLIPTextTransformer()([input_word_ids, input_pos_ids])
-        text_encoder = keras.models.Model([input_word_ids, input_pos_ids], embeds)
-        print("Created text encoder model")
-
-        # Create Diffusion model
-        diffusion_model = DiffusionModelV2(
-            imageHeight,
-            imageWidth,
-            MAX_TEXT_LEN
-        )
-        print("Created diffusion model")
-
-        # Create Decoder model
-        decoder = Decoder(
-            img_height = imageHeight,
-            img_width = imageWidth,                
-        )
-        print("Created decoder model")
-
-        # Create Image Encoder model
-        encoder = ImageEncoder(
-            img_height = imageHeight,
-            img_width = imageWidth
-        )
-        print("Created encoder model")
-
-    # return created models
-    return text_encoder, diffusion_model, decoder , encoder, controlNet
+        # return created models
+        return text_encoder, diffusion_model, decoder , encoder, controlNet
 
 def loadWeightsFromKeras(
         models,
@@ -708,7 +749,7 @@ def loadWeightsFromPytorchCKPT(
         VAEoverride = False
     ):
         print("\nLoading pytorch checkpoint " + pytorch_ckpt_path)
-        pytorchWeights = torch.load(pytorch_ckpt_path, map_location = "cpu")
+        pytorchWeights = torch.load(pytorch_ckpt_path, map_location = "mps")
         if legacy is True:
             ## Legacy Mode
             print("...loading pytroch weights in legacy mode...")
@@ -944,4 +985,4 @@ def displayImage(input_image_tensor, name = "image"):
 
     # Display the image using Matplotlib
     imageFromBatch = Image.fromarray(input_image_array)
-    imageFromBatch.save("shiftFinder/"+name+".png")
+    imageFromBatch.save("debug/"+name+".png")
