@@ -3,8 +3,22 @@ import os
 import sys
 import random
 
+### Image Modules
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+
+### Console GUI
+from rich import print, box
+from rich.panel import Panel
+from rich.text import Text
+
+### Traceback
+try:
+    from rich.traceback import install
+    install(show_locals = True)
+except ImportError:
+    print("Warning: Import error for Rich Traceback")
+    pass    # no need to fail because of missing dev dependency
 
 """
 ReadWriteFile
@@ -12,7 +26,7 @@ ReadWriteFile
 This general purpose module allows the user of MetalDiffusion to do some file operations.
 
 Currently imports:
-.txt files
+.txt files, .png files
 
 Currently writes:
 .txt files detailng the structure of model weights
@@ -36,8 +50,30 @@ def importCreationSettings(filePath):
 def importFromPNGFile(filePath):
     # Create the empty settings variable
     creationList = []
-    for _ in range(20):
+    for _ in range(21):
         creationList.append(None)
+    
+    creationList[0] = "prompt"                  # Prompt
+    creationList[1] = "negative prompt"         # Negative Prompt
+    creationList[2] = int(512)                  # Width
+    creationList[3] = int(512)                  # Height
+    creationList[4] = float(7.5)                # CFG Scale
+    creationList[5] = int(25)                   # Steps
+    creationList[6] = int(1337)                 # Seed
+    creationList[7] = None                      # Weights
+    creationList[8] = int(1)                    # Batch Size
+    creationList[9] = float(0.5)                # Input Image Strength
+    creationList[10] = "12"                     # Animated FPS
+    creationList[11] = "24"                     # Video FPS
+    creationList[12] = "48"                     # Total Frames
+    creationList[13] = "Positive Iteration"     # Video Seed Behavior
+    creationList[14] = 90                       # Video Angle
+    creationList[15] = 200                      # Video Zoom
+    creationList[16] = "0"                      # Video X Translate
+    creationList[17] = "0"                      # Video Y Translate
+    creationList[18] = None                     # ControlNet Model
+    creationList[19] = [1]                      # ControlNet Strength
+    creationList[20] = "DDIM"                   # Sample Method
     
     # Load the file
     if isinstance(filePath, str):
@@ -71,9 +107,10 @@ def importFromPNGFile(filePath):
         if key == "CFG scale": creationList[4] = float(value)
         if key == "steps": creationList[5] = int(value)
         if key == "input image strength": creationList[9] = float(value)
-        if key == "controlNet strength": creationList[19] = list(value)
+        if key == "controlNet strength": creationList[19] = float(value)
         if key == "model": creationList[7] = value
-        if key == "batch size": creationList [4] = int(value)
+        if key == "batch size": creationList[8] = int(value)
+        if key == "sampler": creationList[20] = value
     
     # Add info about the image to the CreationList
     creationList[2] = file.width

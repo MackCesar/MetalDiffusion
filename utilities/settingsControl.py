@@ -1,4 +1,8 @@
 import os, fnmatch, sys, configparser
+### Console GUI
+from rich import print, box
+from rich.panel import Panel
+from rich.text import Text
 
 """
 Settings Control
@@ -59,7 +63,8 @@ def createUserPreferences(fileLocation):
         "VAEModelsLocation" : "models/VAE/",
         "EmbeddingsLocation" : "models/embeddings/",
         "mixedPrecision" : "False",
-        "ControlNetsLocation": "models/controlnets/"
+        "ControlNetsLocation": "models/controlnets/",
+        "LoRAsLocation" : "models/LoRA/"
     }
 
     with open(fileLocation, 'w') as conf:

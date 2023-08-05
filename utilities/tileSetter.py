@@ -60,7 +60,7 @@ def tileImage(
     ### Scale Image
     ## Scale the image so the resulting tiles are scaled
     ## We're cutting tiles from the scaled image
-    if scaleMethod == "ESRGAN":
+    if scaleMethod == "ESRGAN-TensorFlow":
         print("Upscaling with ESRGAN, TensorFlow")
         # ESRGAN Version
         image = ESRGANUpscaleTensorFlow(image, saveResult = debug)
@@ -259,48 +259,58 @@ def setTiles(
 
             if debug is True: print("Position:\n(",imageX,",",imageY,")")
             
-            ## Create the gradient for overlap
-            finalGradient = Image.new("L", (tileWidth, tileHeight), color = "white")
+            ## Create the gradient mask for overlap
+            topBottomMask = Image.new("L", (tileWidth, tileHeight), color = "white")
+            leftRightMask = Image.new("L", (tileWidth, tileHeight), color = "white")
+            finalMask = Image.new("L", (tileWidth, tileHeight), color = "black")
 
-            # Add individual gradients based on tile position
+
+            # Add individual gradients masks based on tile position
 
             if y != 0: # Top Gradient
                 if y == totalRows - 1 or y == 1: # If we're at a border or touching a border tile
-                    finalGradient.paste(gradient.resize( (tileWidth, overlap * 2 + overlap), resample = Image.BICUBIC), (0, 0 - overlap) )
+                    topBottomMask.paste(gradient.resize( (tileWidth, overlap * 2 + overlap), resample = Image.BICUBIC), (0, 0 - overlap) )
                 else:
-                    finalGradient.paste(gradient.resize( (tileWidth, overlap + overlap // 2), resample = Image.BICUBIC), (0, 0 - overlap // 2) )
+                    topBottomMask.paste(gradient.resize( (tileWidth, overlap + overlap // 2), resample = Image.BICUBIC), (0, 0 - overlap // 2) )
             
             if y != totalRows - 1: # Bottom Gradient
                 if y == 0 or y == totalRows - 2: # If we're at a border
-                    finalGradient.paste(gradient.rotate(180).resize( (tileWidth, overlap * 2 + overlap), resample = Image.BICUBIC), (0, tileHeight - (overlap * 2) + overlap))
+                    topBottomMask.paste(gradient.rotate(180).resize( (tileWidth, overlap * 2 + overlap), resample = Image.BICUBIC), (0, tileHeight - (overlap * 2) + overlap))
                 else:
-                    finalGradient.paste(gradient.rotate(180).resize( (tileWidth, overlap + overlap // 2), resample = Image.BICUBIC), (0, tileHeight - (overlap) + overlap // 2))
+                    topBottomMask.paste(gradient.rotate(180).resize( (tileWidth, overlap + overlap // 2), resample = Image.BICUBIC), (0, tileHeight - (overlap) + overlap // 2))
+
+            if debug is True: topBottomMask.save(f"tileTest/{x}_{y}_topBottom.png")
             
             if x != 0: # Left Gradient
                 if x == totalColumns -1 or x == 1: # If we're at a border
-                    finalGradient.paste(gradient.rotate(90).resize( (overlap * 2 + overlap, tileHeight), resample = Image.BICUBIC), (0 - overlap, 0) )
+                    leftRightMask.paste(gradient.rotate(90).resize( (overlap * 2 + overlap, tileHeight), resample = Image.BICUBIC), (0 - overlap, 0) )
                 else:
-                    finalGradient.paste(gradient.rotate(90).resize( (overlap + overlap // 2, tileHeight), resample = Image.BICUBIC), (0 - overlap // 2, 0) )
+                    leftRightMask.paste(gradient.rotate(90).resize( (overlap + overlap // 2, tileHeight), resample = Image.BICUBIC), (0 - overlap // 2, 0) )
             
             if x != totalColumns - 1: # Right Gradient
                 if x == 0 or x == totalColumns - 2: # If we're at a border
-                    finalGradient.paste(gradient.rotate(270).resize( (overlap * 2 + overlap, tileHeight), resample = Image.BICUBIC), (tileWidth - (overlap * 2) + overlap, 0) )
+                    leftRightMask.paste(gradient.rotate(270).resize( (overlap * 2 + overlap, tileHeight), resample = Image.BICUBIC), (tileWidth - (overlap * 2) + overlap, 0) )
                 else:
-                    finalGradient.paste(gradient.rotate(270).resize( (overlap + overlap // 2, tileHeight), resample = Image.BICUBIC), (tileWidth - overlap + overlap // 2, 0) )
+                    leftRightMask.paste(gradient.rotate(270).resize( (overlap + overlap // 2, tileHeight), resample = Image.BICUBIC), (tileWidth - overlap + overlap // 2, 0) )
             
-            if debug is True: finalGradient.save(f"tileTest/{x}_{y}_finalGradient.png")
-            
+            if debug is True: leftRightMask.save(f"tileTest/{x}_{y}_leftRightMask.png")
 
+            # Create the final gradient mask for overlap
+
+            finalMask.paste(leftRightMask, (0, 0), mask = topBottomMask)
+
+            if debug is True: finalMask.save(f"tileTest/{x}_{y}_finalMask.png")
+            
             if debug is True: print("Now applying:")
 
             if debug is True:
                 tileBeforePaste = Image.new("RGBA", (tileWidth, tileHeight), "black")
-                tileBeforePaste.paste(tile, (0, 0), mask = finalGradient)
+                tileBeforePaste.paste(tile, (0, 0), mask = finalMask)
                 tileBeforePaste.save(f"tileTest/tileBeforePaste_{x}_{y}.png")
             
             # Place the tile in two ways:
             #overlayingImage.paste(tile, (imageX, imageY), mask = finalGradient) # With alpha's
-            finalImage.paste(tile, (imageX, imageY), mask = finalGradient) # as the underlying image
+            finalImage.paste(tile, (imageX, imageY), mask = finalMask) # as the underlying image
 
             if debug is True: finalImage.save(f"tileTest/tile_{x}_{y}.png")
 
@@ -318,12 +328,12 @@ This section is for running the script on it's own
 """
 
 if __name__ == "__main__":
-    image = cv2.imread("tileTest/tileTest005.png", cv2.IMREAD_COLOR)
+    image = cv2.imread("tileTest/tileTest006.png", cv2.IMREAD_COLOR)
     print("\nInput image shape:",image.shape)
 
     print("\nImage loaded. Tiling...")
     # Split the image into four 256x256 sub-images
-    tiledImage = tileImage(image, scale = 8, debug = False)
+    tiledImage = tileImage(image, scale = 4, debug = False)
     print("\n...tiled!")
 
 
@@ -343,7 +353,7 @@ if __name__ == "__main__":
         tiledImage[i] = np.array(tempTile)
         #print("New Tile Shape:", tiledImage[i].shape)
 
-    finalImage = setTiles(tiledImage, debug = False)
+    finalImage = setTiles(tiledImage, debug = True)
 
     print("Displaying Image:")
 

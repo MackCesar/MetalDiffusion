@@ -80,11 +80,10 @@ def preProcessControlNetImage(
         control = []
         originalTileSize = detectedMap[0].shape[0]
         for item in detectedMap:
-            print("Tile shape:",item.shape)
+            #print("Tile shape:",item.shape)
             resizedItem = cv2.resize(item, (imageSize[0], imageSize[1]))
-            print("Reized tile:", resizedItem.shape)
+            #print("Reized tile:", resizedItem.shape)
             control.append(resizedItem)
-        control.append(originalTileSize)
         return control
     else:
 
@@ -93,7 +92,8 @@ def preProcessControlNetImage(
 
         ### Prepare Image as Tensor ###
         detectedMap = HWC3(detectedMap)
-        control = tf.constant(detectedMap.copy(), dtype = tf.float32) / 255.0
+        #control = tf.constant(detectedMap.copy(), dtype = tf.float32) / 255.0
+        control = detectedMap
 
         return [control]
 

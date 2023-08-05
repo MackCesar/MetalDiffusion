@@ -1,9 +1,34 @@
+"""
+Video Utilities
+----------------
+
+Welcome to Hollywood! Here, MetalDiffusion can perform various video tasks.
+"""
+
+### Console GUI Mdoule
+from rich import print, box
+from rich.panel import Panel
+from rich.text import Text
+
+### Traceback Module
+try:
+    from rich.traceback import install
+    install(show_locals = True)
+except ImportError:
+    print("Warning: Import error for Rich Traceback")
+    pass    # no need to fail because of missing dev dependency
+
+### Image Manipulation Modules
 import numpy as np
 import pandas as pd
 import cv2
+
+### System Modules
 import subprocess
 import re
 from skimage.exposure import cumulative_distribution
+
+### Math Modules
 import random
 
 ### Functions
@@ -15,6 +40,8 @@ def nextSeed(seedBehavior, seed):
         seed = seed -1
     elif seedBehavior == "Random Iteration":
         seed = random.randint(0, 2 ** 31)
+    else:
+        seed = seed
     
     return seed
 
@@ -27,34 +54,47 @@ def animateFrame2DWarp(
     width,
     height
 ):
-
+    print("\nApplying [bold]camera movement[/bold]...")
     # Convert image to CV2
-    prev_img_cv2 = cv2.cvtColor(np.array(prev_img), cv2.COLOR_RGB2BGR)
+    if isinstance(prev_img, np.ndarray) is False:
+        print("...received PIL Image, converting to NumPy...")
+        prev_img = np.array(prev_img)
+    print("...converting frame to [white]OpenCV[/white]...")
+    prev_img_cv2 = cv2.cvtColor(prev_img, cv2.COLOR_RGB2BGR)
 
     # zoom limits
     if zoom < 0.9:
+        print("...[yellow]zoom limit reached, setting to 0.9[/yellow]...")
         zoom = 0.9
     if zoom > 1.1:
+        print("...[yellow]zoom limit reached, setting to 1.1[/yellow]...")
         zoom = 1.1
 
+    print("...preparing movement instructions...")
     center = (width // 2, height // 2)
     trans_mat = np.float32([[1, 0, xTranslation], [0, 1, yTranslation]])
     rot_mat = cv2.getRotationMatrix2D(center, angle, zoom)
     trans_mat = np.vstack([trans_mat, [0,0,1]])
     rot_mat = np.vstack([rot_mat, [0,0,1]])
     xform = np.matmul(rot_mat, trans_mat)
-
-    return cv2.warpPerspective(
+    
+    print("...applying camera movement...")
+    finalImage = cv2.warpPerspective(
         prev_img_cv2,
         xform,
         (prev_img_cv2.shape[1], prev_img_cv2.shape[0]),
-        borderMode = cv2.BORDER_REFLECT
+        borderMode = cv2.BORDER_REPLICATE
     )
+
+    print("...[bold green]done![/bold green]\n")
+
+    return finalImage
 
 def constructFFmpegVideoCmd(animatedFPS, videoFPS, frames_path, resultPath):
 
     cmd = [
         "ffmpeg",
+        "-y",
         "-r", str(animatedFPS),
         "-f", "image2",
         "-i", frames_path,
@@ -65,12 +105,81 @@ def constructFFmpegVideoCmd(animatedFPS, videoFPS, frames_path, resultPath):
         "-q:v 0", "-q:a 0"
     ]
 
+    # ffmpeg -r 12 -f image2 -i BigBang001/bigBang001_%05d.png -crf 0 -c:v libx264 -pix_fmt yuv420p BigBang001/final.mp4 -q:v 0 -q:a 0
+    # ffmpeg -r 12 -f image2 -i BigBang001/bigBang001_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le BigBang001/final.mov
+    # ffmpeg -y -framerate 12 -f image2 -i BigBang001/bigBang001_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le -filter:v "minterpolate='fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1'" BigBang001/final.mov
+    # ffmpeg -y -framerate 12 -f image2 -i BigBang001/bigBang001_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le -filter:v "minterpolate='fps=24:scd=none:me_mode=bidir:vsbmc=1:search_param=512'" BigBang001/final.mov
+    # ffmpeg -y -framerate 12 -f image2 -i BigBang001/bigBang001_%05d.png -c:v prores_videotoolbox -profile:v 1 -pix_fmt yuv422p10le -filter:v "minterpolate='fps=24:scd=none:me_mode=bidir:vsbmc=1:search_param=512'" BigBang001/final.mov
+    # ffmpeg -y -framerate 3 -f image2 -i frame_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le -filter:v "minterpolate='fps=24:scd=fdiff:me_mode=bilat:vsbmc=1:search_param=32'" final.mov
+    # ffmpeg -y -framerate 3 -f image2 -i frame_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le -filter:v "minterpolate='fps=24:mc_mode=aobmc:vsbmc=1'" final.mov
+    # ffmpeg -y -framerate 3 -f image2 -i frame_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le -filter:v "setpts=8*PTS,minterpolate='fps=25:scd=none:me_mode=bidir:vsbmc=1:search_param=400'"
+    # ffmpeg -y -framerate 3 -f image2 -i frame_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le -filter:v "setpts=8*PTS"
+    # ffmpeg -y -i redNebula.mov -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=120'" redNebulaSlow.mov
+    # ffmpeg -y -framerate 24 -f image2 -i frame_%05d.png -c:v prores_ks -profile:v 1 -vendor ap10 -pix_fmt yuv422p10le
+    # -r = frame rate
+    ## 12 frames per second
+    # -f = force format
+    ## image2 = create video from directory of images
+    # -i = Input
+    ## inputFolder/fileName_%05d.png
+    # -crf = constant rate factor
+    ## 0 is lossless, 23 is default, 51 is super-duper-lossy
+    # -c:v = Codec:Video
+    ## libx264 = h.264 codec
+    ## prores_ks = Apple ProRes
+    # -profile:v = Apple ProRes Profile
+    ## 1 = ProRes LT
+    ## 2 = ProRes
+    ## 3 = ProRes HQ
+    # -vendor = Override the 4-byte vendor ID. A custom vendor ID like apl0 would claim the stream was produced by the Apple encoder.
+    ## ap10 = claim the stream was produced by the Apple encoder
+    # pix_fmt = Pixel Format
+    ## yuv420p = planar 8-bit YUV 4:2:0
+    ## yuv422p10le = 10bit 4:2:2
+    # -y = Overwrite Output File
+
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
     
     if process.returncode != 0:
         print(stderr)
         raise RuntimeError(stderr)
+
+def histogramMatching(
+        cumulativeCurrent,
+        cumulativePrevious,
+        image
+    ):
+    bin = np.interp(cumulativeCurrent, cumulativePrevious, np.arange(256))   # find closest matches to b_t
+    pixelReplace = {i:bin[i] for i in range(256)} # dictionary to replace the pixels
+    mapping = np.arange(0,256)
+    for (key, value) in pixelReplace.items():
+        mapping[key] = value
+    shape = image.shape
+    image = np.reshape(mapping[image.ravel()], image.shape)
+    image = np.reshape(image, shape)
+    return image.astype(np.uint8)
+
+
+def cumulativeDistributionFunction(
+        image # single channel of the image
+        ):
+    cumulative, bin = cumulative_distribution(image)
+    #print(b)
+    for i in range(bin[0]):
+        cumulative = np.insert(cumulative, 0, 0)
+    for i in range(bin[-1]+1, 256):
+        cumulative = np.append(cumulative, 1)
+    return cumulative
+
+
+def maintainColors(previousImage, colorMatchSample):
+    finalImage = np.zeros(previousImage.shape)
+    for i in range(3):
+        cumulativeCurrent = cumulativeDistributionFunction(previousImage[...,i])
+        cumulativePrevious = cumulativeDistributionFunction(colorMatchSample[...,i].astype(np.uint8))
+        finalImage[...,i] = histogramMatching(cumulativeCurrent, cumulativePrevious, previousImage[...,i])
+    return finalImage[...,:3].astype(np.uint8)
 
 ### Old Functions
 # these parsing methods are taking from the Deforum Stable Diffusion Notebook(https://colab.research.google.com/github/deforum/stable-diffusion/blob/main/Deforum_Stable_Diffusion.ipynb) 
@@ -276,9 +385,10 @@ def construct_ffmpeg_video_cmd(FPS, framesPath, resultPath):
 
     cmd = [
         "ffmpeg",
+        "-y",
         "-r", animationFPS,
         "-f", "image2",
-        "-i", frames_path,
+        "-i", framesPath,
         "-crf", videoFPS,
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
