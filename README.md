@@ -1,11 +1,7 @@
 # MetalDiffusion
-## Stable Diffusion in TensorFlow / Keras for Apple Metal on Intel Macs
+## Stable Diffusion for Intel and Silicon Mac's via Apple Metal
 
-A Keras / Tensorflow implementation of Stable Diffusion, intended for Apple Metal on Intel Macs. This implementation will utilize GPU's on Intel Macs.
-
-The weights were ported from the original implementation of Stable Diffusion.
-
-
+Stable Diffusion, intended for Apple Metal on Intel Macs. This implementation will utilize GPU's on Intel Macs.
 
 ## Installation
 
