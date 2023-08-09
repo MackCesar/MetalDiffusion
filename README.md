@@ -9,163 +9,21 @@ The weights were ported from the original implementation of Stable Diffusion.
 
 ## Installation
 
-These installation instructions are geared towards use on an Intel Mac.
+Currently, MetalDiffusion can only be installed via the Terminal App. Follow the instructions here:
 
-This program is best utilized within a python virtual environment, making it independent of the python already installed on MacOS.
-### Programs required
-
-1) Terminal
-2) Homebrew
-3) Pyenv
-4) Python 3.9
-5) Git
-
-`Terminal` will be used for all of the following commands:
-
-### Install Homebrew, if not already installed
-
-`Homebrew` is a fundamental tool for Mac and is required for this installation process.
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-### Install/Update pyenv
-
-`pyenv` allows you to install Python independently from the Mac's base installation.
-
-```bash
-brew install pyenv
-```
-
-If pyenv is already installed, then Homebrew will update pyenv
-
-### Install Python via pyenv
-
-```bash
-pyenv install 3.9.0
-```
-
-### Set the global Python
-
-Set the global python that the Mac will use to the newly installed, via pyenv, python.
-
-```bash
-pyenv global 3.9.0
-```
-
-This step will override which version and the location of python the Mac will use, allowing for easier updating and control.
-
-### Install/Update git
-
-`git` allows you to download this repository (repo)
-
-```bash
-brew install git
-```
-
-If git is already installed, then Homebrew will update git
-
-### Download the github repo
-
-Navigate to a folder/directory you want to create your virtual environment in. For example: `/Users/MacUser`
-
-Download the repo, either by downloading the
-[zip](https://github.com/soten355/stable-diffusion-tensorflow-IntelMetal/archive/refs/heads/master.zip)
-file or by cloning the repo with git:
-
-```bash
-git clone https://github.com/soten355/MetalDiffusion.git
-```
-
-### Start working in the virutal environment
-
-First, navigate to the root folder in the github repo that was just installed. For example:
-
-```bash
-cd /Users/MacUser/MetalDiffusion/
-```
-
-#### Create a virtual environment with *virtualenv*
-
-1) Create your virtual environment for `python`:
-
-    ```bash
-    python -m venv venv
-    ```
-   
-2) Activate your virtual environment:
-
-    ```bash
-    source venv/bin/activate
-    ```
-3) Install dependencies using the `requirements.txt` file:
-
-    ```bash
-    pip install pip --upgrade --no-cache-dir
-    ```
-
-4) Install dependencies using the `requirements.txt` file:
-
-    ```bash
-    pip install -r requirements.txt --no-cache-dir
-    ```
-5) Run the program:
-    
-    ```bash
-    python dream.py
-    ```
-6) When finished using Stable Diffusion, deactivate the virtual environment:
-    
-    ```bash
-    deactivate
-    ```
+https://github.com/soten355/MetalDiffusion/wiki/Installation
 
 ## Usage
 
-### Launching/Starting the program Basics
+After installation, MetalDiffusion is easy to use. Follow the steps here:
 
-This program is run through the `dream.py` script, which is a [Gradio Web User Interface](https://gradio.app/). With `Terminal` run this command:
+https://github.com/soten355/MetalDiffusion/wiki/Starting-MetalDiffusion
 
-```bash
-python dream.py
-```
+## Wiki
 
-The web UI will automatically load into your default browser.
+Further details about MetalDiffusion, including on how to use Text Embeddings (textural inversion), LoRA's, and more can be found in the Github wiki:
 
-When you and your computer are finished creating, return to terminal and press `Control C` to end the Gradio web server. Alternatively, you can also quit `Terminal` entirely.
-
-#### Launching/Starting Overrides
-By default, the Gradio WebUI will:
-* Not create a public link
-* Launch the webUI automatically in your default browser
-
-The Gradio defaults can be overridden with command lines. For example:
-
-```bash
-python dream.py --share
-```
-This will launch the webUI and will create a public link through Gradio. This is useful for Google Colab notebooks.
-
-To finish the program, in `Terminal` type `CTRL+C` and the program will quit or quit `Terminal` entirely.
-
-## Legacy vs Contemporary Mode
-
-Stable Diffusion 2.0 (SD) uses two different models than SD 1.4 and 1.5. It's important to select the correct mode when creating with your model(s).
-
-Under *Settings*, select your model. Then select `Use Legacy Stable Diffusion` if you are using any SD models made prior to the release of SD 2.0.
-
-#### Differences between the legacy model and contemporary model
-
-What changed between the two versions of Stable Diffusion were:
-
-**The Text Encoder model**
-
-* SD1.4/1.5 uses OpenAI's CLIP Encoder model
-* SD2.x uses the OPENClip Encoder model
-
-**The Unet architecture**
-* The Unet is located inside the diffusion model, and what changed was the architecture of the Unet.
+https://github.com/soten355/MetalDiffusion/wiki
 
 ## Example outputs 
 
