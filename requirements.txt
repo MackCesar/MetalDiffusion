@@ -1,5 +1,6 @@
 h5py
 Pillow
+ml_dtypes==0.2.0
 tensorflow-addons
 tensorflow-macos
 tensorflow-metal
