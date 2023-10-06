@@ -20,9 +20,16 @@ import random
 import torch
 import torchvision.transforms as transforms
 # Standard Pipeline
-from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
+from diffusers import DiffusionPipeline
+#from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
+#from diffusers import StableDiffusionPipeline
+from stableDiffusionDiffusers.communityPipelines.pipeline_stable_diffusion import StableDiffusionPipeline
+from stableDiffusionDiffusers.communityPipelines.pipeline_stable_diffusion_img2img import StableDiffusionImg2ImgPipeline
 # ControlNet
-from diffusers import StableDiffusionControlNetPipeline, StableDiffusionControlNetImg2ImgPipeline, ControlNetModel
+# from diffusers import StableDiffusionControlNetPipeline, StableDiffusionControlNetImg2ImgPipeline, ControlNetModel
+from diffusers import ControlNetModel
+from stableDiffusionDiffusers.communityPipelines.pipeline_controlnet_img2img import StableDiffusionControlNetImg2ImgPipeline
+from stableDiffusionDiffusers.communityPipelines.pipeline_controlnet import StableDiffusionControlNetPipeline
 # Community Pipelines
 from stableDiffusionDiffusers.communityPipelines.stable_diffusion_controlnet_reference import StableDiffusionControlNetReferencePipeline
 # Components
@@ -131,9 +138,12 @@ class StableDiffusionDiffusers:
         self.pipeline = None
         self.imageToImagePipeline = False
         self.torchDevice = device
+
+        #### Precision
         self.mixedPrecision = mixedPrecision
         self.dtype = torch.float32
         self.CLIPSkip = CLIPSkip
+
         self.compileModels()
 
         ### Step 4: Graph Models ###
@@ -174,7 +184,7 @@ class StableDiffusionDiffusers:
             clearMemory()
 
             ## Create pipeline
-            if "safetensors" in self.controlNetWeights:
+            if "safetensors"in self.controlNetWeights or "ckpt" in self.controlNetWeights:
                 print("Loading",self.controlNetWeights,"via single file safetensors...")
                 self.controlNet = ControlNetModel.from_pretrained(
                     self.controlNetWeights
@@ -193,7 +203,7 @@ class StableDiffusionDiffusers:
             self.controlNet.to(self.torchDevice)
         
         # Load Main Pipeline
-        if "safetensors" in self.weights:
+        if "safetensors" in self.weights or "ckpt" in self.weights:
             print("\nLoading", self.weights,"weights via single file safetensors...")
             if self.controlNet is None:
                 if self.imageToImagePipeline is True:
@@ -241,12 +251,14 @@ class StableDiffusionDiffusers:
                         )
                 else:
                     print("...loading standard pipeline...")
+                    ### CLIP Skip
                     if self.CLIPSkip > 0:
                         print("...using CLIP Skip:",self.CLIPSkip,"...")
                     textEncoder = CLIPTextModel.from_pretrained(
                         self.weights,
                         subfolder = "text_encoder",
                         num_hidden_layers = (12 - self.CLIPSkip),
+                        use_safetensors = True,
                         torch_dtype = self.dtype
                     )
 
@@ -254,11 +266,9 @@ class StableDiffusionDiffusers:
                         self.weights,
                         text_encoder = textEncoder,
                         torch_dtype = self.dtype,
+                        use_safetensors = True,
                         safety_checker = None
                     )
-
-                    ## To be fully implemented with HuggingFace updates their code for my request
-                    # self.pipeline.enable_model_cpu_offload(gpu_id = self.torchDevice)
 
                     if self.VAE != None:
                         print("...using",self.VAE,"as VAE...")
@@ -289,16 +299,33 @@ class StableDiffusionDiffusers:
                             safety_checker = None
                             )
             print("...[green]done![/green]")
+        
+        # LoRAs
+        if len(self.LoRAs) > 0:
+            print("\nLoading [bold]LoRAs[/bold]...")
+            self.pipeline.to(self.torchDevice)
+            if self.LoRAPath == None:
+                self.LoRAPath = self.LoRAs[0]
+                del self.LoRAs[0]
+            for lora in self.LoRAs:
+                print("...loading",lora)
+                self.pipeline.load_lora_weights("./"+self.LoRAPath, weight_name = lora)
+                print("...loaded!")
 
-        # Move models to GPU
-        self.pipeline.to(self.torchDevice)
-        #self.pipeline.enable_model_cpu_offload(gpu_id = self.torchDevice)
-        self.pipeline.enable_attention_slicing()
+        # Optimizations
+        ## Move to GPU - Old
+        #self.pipeline.to(self.torchDevice)
+        ## Model CPU Offload, saves memory
+        ## See: https://huggingface.co/docs/diffusers/optimization/fp16#model-offloading-for-fast-inference-and-memory-savings
+        self.pipeline.enable_model_cpu_offload(gpu_id = self.torchDevice)
+
+        ## Attention, the most memory hungry version
+        #self.pipeline.enable_attention_slicing(1)
+        #self.pipeline.unet.set_attn_processor(AttnProcessor2_0())
+        ## Note: Seems like we don't need to do this. See: https://pytorch.org/blog/accelerated-diffusers-pt-20/
+
+        ## Safety Checker
         self.pipeline.safety_checker = None
-        if self.torchDevice == "mps":
-            print("\nDiffusers on GPU via :mechanical_arm: [white]Metal[/white] :mechanical_arm: ready!")
-        else:
-            print("\nDiffusers on CPU ready!")
         
         # Text Embeddings
         if self.textEmbeddings != None:
@@ -314,22 +341,17 @@ class StableDiffusionDiffusers:
                 print(self.textEmbeddingsTokens[index],"loaded!")
             print("...done! All text embeddings loaded.")
         
-        # LoRAs
-        if len(self.LoRAs) > 0:
-            print("\nLoading [bold]LoRAs[/bold]...")
-            if self.LoRAPath == None:
-                self.LoRAPath = self.LoRAs[0]
-                del self.LoRAs[0]
-            for lora in self.LoRAs:
-                print("...loading",lora)
-                self.pipeline.load_lora_weights("./"+self.LoRAPath, weight_name = lora)
-                print("...loaded!")
-        
         # Token Merging
         if self.tokenMergingStrength > 0:
             print("Applying token merging...")
             tomesd.apply_patch(self.pipeline, ratio = 0.5)
             print("...done!")
+        
+        ## Final Messages
+        if self.torchDevice == "mps":
+            print("\nDiffusers on GPU via :mechanical_arm: [white]Metal[/white] :mechanical_arm: ready!")
+        else:
+            print("\nDiffusers on CPU ready!")
     """
     Change Policy
     """
@@ -345,10 +367,12 @@ class StableDiffusionDiffusers:
             if self.dtype != torch.float32:
                 print("\n...changing to regular precision (FP32)...")
                 self.dtype = torch.float32
+                torch.set_float32_matmul_precision('high')
                 self.compileModels()
             else:
                 print("\n...using regular precision (FP32)...")
                 self.dtype = torch.float32
+                torch.set_float32_matmul_precision('high')
     """
     Generate and image, the key function
     """
@@ -486,10 +510,10 @@ class StableDiffusionDiffusers:
         
         ### Step 7: LoRAs
         if len(self.LoRAs) > 0:
-            loraScale = LoRAStrength
+            loraScale = {"scale": LoRAStrength}
             print("...using LoRA [bold]strength[/bold] of",loraScale)
         else:
-            loraScale = 0.0
+            loraScale = None
         
         ### Step 8: Final Memory Clearing
         clearMemory()
@@ -506,7 +530,8 @@ class StableDiffusionDiffusers:
                     num_inference_steps = num_steps,
                     guidance_scale = unconditional_guidance_scale,
                     generator = seed,
-                    num_images_per_prompt = batch_size
+                    num_images_per_prompt = batch_size,
+                    cross_attention_kwargs = loraScale
                 )
             else:
                 decoded = self.pipeline(
@@ -520,7 +545,8 @@ class StableDiffusionDiffusers:
                     generator = seed,
                     num_images_per_prompt = batch_size,
                     controlnet_conditioning_scale = controlNetStrength,
-                    guess_mode = controlNetGuessMode
+                    guess_mode = controlNetGuessMode,
+                    cross_attention_kwargs = loraScale
                 )
         else:
             if self.controlNet is None:
@@ -532,7 +558,8 @@ class StableDiffusionDiffusers:
                     num_inference_steps = num_steps,
                     guidance_scale = unconditional_guidance_scale,
                     generator = seed,
-                    num_images_per_prompt = batch_size
+                    num_images_per_prompt = batch_size,
+                    cross_attention_kwargs = loraScale
                 )
             else:
                 decoded = self.pipeline(
@@ -545,7 +572,7 @@ class StableDiffusionDiffusers:
                     num_images_per_prompt = batch_size,
                     controlnet_conditioning_scale = controlNetStrength,
                     guess_mode = controlNetGuessMode,
-                    cross_attention_kwargs = {"scale": loraScale}
+                    cross_attention_kwargs = loraScale
                 )
         
         ### Step 10: Decoding stage
@@ -626,6 +653,8 @@ def clearMemory():
 
 if __name__ == "__main__":
     print("\n\n[bold]Hello![/bold] Welcome to the Diffusers and PyTorch version of MetalDiffusion.")
+
+    print("\nThis time, we're trying out SDXL")
     
     print("Running diffusers now!")
 
@@ -636,16 +665,50 @@ if __name__ == "__main__":
     seed = random.randint(0, 2 ** 31)
     print("\nCreating generator")
 
-    generator = StableDiffusionDiffusers(
+    """generator = StableDiffusionDiffusers(
         imageWidth = 1024,
         imageHeight = 512,
         weights = "./models/diffusers/DreamShaper",
         jit_compile = False
+    )"""
+
+    print("Creating base model...")
+    base = DiffusionPipeline.from_pretrained(
+        "stabilityai/stable-diffusion-xl-base-1.0",
+        use_safetensors = True
     )
+    base.to("mps")
+
+    print("Creating refiner model...")
+    refiner = DiffusionPipeline.from_pretrained(
+        "stabilityai/stable-diffusion-xl-refiner-1.0",
+        text_encoder_2 = base.text_encoder_2,
+        vae = base.vae,
+        use_safetensors=True
+    )
+    refiner.to("mps")
+
+    # Define how many steps and what % of steps to be run on each experts (80/20) here
+    n_steps = 40
+    high_noise_frac = 0.8
 
     print("\nGenerating image")
 
-    images = generator.generate(
+    # run both experts
+    image = base(
+        prompt=prompt,
+        num_inference_steps=n_steps,
+        denoising_end=high_noise_frac,
+        output_type="latent",
+    ).images
+    image = refiner(
+        prompt=prompt,
+        num_inference_steps=n_steps,
+        denoising_start=high_noise_frac,
+        image=image,
+    ).images[0]
+
+    """images = generator.generate(
         prompt = prompt,
         negativePrompt = negativePrompt,
         batch_size = 1,
@@ -655,12 +718,15 @@ if __name__ == "__main__":
         input_image = None,
         input_image_strength = 0.2,
         sampler = "Euler"
-    )
+    )"""
 
     print("\nDone! Saving image(s)")
 
-    i = 0
+    location = "stableDiffusionDiffusers/final0000"+str(seed)+".png"
+    image.save(location)
+
+    """i = 0
     for image in images:
         location = "stableDiffusionDiffusers/final0000"+str(seed)+".png"
         image.save(location)
-        i += 1
+        i += 1"""
