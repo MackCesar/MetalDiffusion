@@ -99,4 +99,9 @@ def listDevices(
     if printDevices is True:
         print(deviceList)
 
+    # MacOS 14 bug: CPU dictionary object does NOT have a 'name' key,
+    # and this key is  required later in dream.py. Might be not only the MacOS problem,
+    # therefore: remove devices with no 'name'.
+    deviceList = list(filter(lambda device: 'name' in device, device))
+
     return deviceList
