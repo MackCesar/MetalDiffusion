@@ -11,7 +11,7 @@ regex
 gradio
 scikit-image
 psutil
-torch
+torch==2.1.0
 torchvision
 opencv-python
 numexpr
@@ -26,3 +26,5 @@ tqdm
 compel
 tomesd
 accelerate
+omegaconf
+traceback2
