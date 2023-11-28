@@ -8,7 +8,7 @@ tensorflow-hub
 jax-metal
 ftfy
 regex
-gradio
+gradio==3.50.2
 scikit-image
 psutil
 torch==2.1.0
