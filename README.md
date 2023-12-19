@@ -1,5 +1,5 @@
 # MetalDiffusion
-Stable Diffusion for Intel and Silicon Mac's via Apple Metal This implementation will utilize GPU's on both Intel and Silicon Mac's. MetalDiffusion is exclusively designed to run on MacOS.
+Stable Diffusion for Intel and Silicon Mac's via Apple Metal. This implementation will utilize GPU's on both Intel and Silicon Mac's. MetalDiffusion is exclusively designed to run on MacOS.
 
 ## Installation
 
