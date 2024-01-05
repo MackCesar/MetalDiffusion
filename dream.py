@@ -929,7 +929,7 @@ class dreamWorld:
                     currentInputFrame = previousFrame
                 
                 # Debug
-                currentInputFrame.save(f"debug/frameAfterWarpBeforeInference_{frameNumber:05}.png", format = "png")
+                # currentInputFrame.save(f"debug/frameAfterWarpBeforeInference_{frameNumber:05}.png", format = "png")
             else:
                 currentInputFrame = previousFrame
 
