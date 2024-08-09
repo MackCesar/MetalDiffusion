@@ -451,7 +451,8 @@ class ImageSettings():
 
         )
 
-        sampleChoices = ["Basic", "DDIM", "DDPM", "DPM Solver", "Euler", "Euler A", "LMS", "PNDM"]
+        sampleChoices = ["Basic", "DDIM", "DDPM", "DPM Solver", "DPM++ 2M","DPM++ 2M SDE","DPM++ 2S a Karras","DPM++ SDE","DPM2 a Karras","DPM2 Karras"
+,"DPM2","DPM fast","Euler", "Euler A", "LMS", "LMS Karras", "PNDM"]
 
         self.sampleMethod = gr.Dropdown(
             choices = sampleChoices,

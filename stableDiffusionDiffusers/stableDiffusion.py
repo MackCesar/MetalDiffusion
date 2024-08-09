@@ -45,7 +45,13 @@ from diffusers import (
     EulerDiscreteScheduler,
     EulerAncestralDiscreteScheduler,
     DPMSolverMultistepScheduler,
-    UniPCMultistepScheduler
+    UniPCMultistepScheduler,
+    HeunDiscreteScheduler,
+    KDPM2DiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler,
+    DPMSolverSinglestepScheduler,
+    IPNDMScheduler,
+    DPMSolverSDEScheduler
 )
 
 ### Weights Loading
@@ -468,7 +474,7 @@ class StableDiffusionDiffusers:
             useKarrasSigmas = False
 
         ### Step 5: Load Sampler
-        ## List of samplers: sampleChoices = ["Basic", "DDIM", "DDPM", "DPM Solver", "Euler", "Euler A", "LMS", "PNDM"]
+        ## List of samplers: sampleChoices = ["Basic", "DDIM", "DDPM", "DPM Solver", "Euler", "Euler A", "LMS", "PNDM", "DPM++ 2M", "DPM++ 2M Karras", "DPM++ 2M SDE", "DPM++ 2M SDE Karras", "DPM++ 2S a", "DPM++ 2S a Karras", "DPM++ SDE", "DPM++ SDE Karras", "DPM2 a Karras", "DPM2 Karras", "DPM2", "DPM fast", "LMS Karras"]
         if sampler == "DDIM":
             print("...loading [blue]DDIM[/blue] sampler...")
             self.pipeline.scheduler = DDIMScheduler.from_config(self.pipeline.scheduler.config)
@@ -477,27 +483,61 @@ class StableDiffusionDiffusers:
             self.pipeline.scheduler = DDPMScheduler.from_config(self.pipeline.scheduler.config)
         elif sampler == "DPM Solver":
             print("...loading [blue]DPM Solver[/blue] sampler...")
-            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config, use_karras_sigmas = useKarrasSigmas)
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config,
+                                                                              use_karras_sigmas=useKarrasSigmas)
+        elif sampler == "DPM++ 2M":
+            print("...loading [blue]DPM++2M[/blue] sampler…")
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config, algorithm_type="dpmsolver++")
+        elif sampler == "DPM++ 2M SDE":
+            print("…loading [blue]DPM++ 2M SDE[/blue] sampler…")
+            self.pipeline.scheduler = DPMSolverSDEScheduler.from_config(self.pipeline.scheduler.config, algorithm_type="dpmsolver++")
+        elif sampler == "DPM++ 2S a":
+            print("…loading [blue]DPM++ 2S a[/blue] sampler…")
+            self.pipeline.scheduler = DPMSolverSinglestepScheduler.from_config(self.pipeline.scheduler.config, algorithm_type="dpmsolver++")
+        elif sampler == "DPM++ 2S a Karras":
+            print("…loading [blue]DPM++ 2S a Karras[/blue] sampler…")
+            self.pipeline.scheduler = DPMSolverSinglestepScheduler.from_config(self.pipeline.scheduler.config, algorithm_type="dpmsolver++", use_karras_sigmas=True)
+        elif sampler == "DPM++ SDE":
+            print("…loading [blue]DPM++ SDE[/blue] sampler…")
+            self.pipeline.scheduler = DPMSolverSDEScheduler.from_config(self.pipeline.scheduler.config, algorithm_type="dpmsolver++")
+        elif sampler == "DPM2 a Karras":
+            print("…loading [blue]DPM2 a Karras[/blue] sampler…")
+            self.pipeline.scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.pipeline.scheduler.config, use_karras_sigmas=True)
+        elif sampler == "DPM2 Karras":
+            print("…loading [blue]DPM2 Karras[/blue] sampler…")
+            self.pipeline.scheduler = KDPM2DiscreteScheduler.from_config(self.pipeline.scheduler.config, use_karras_sigmas=True)
+        elif sampler == "DPM2":
+            print("…loading [blue]DPM2[/blue] sampler…")
+            self.pipeline.scheduler = KDPM2DiscreteScheduler.from_config(self.pipeline.scheduler.config)
+        elif sampler == "DPM fast":
+            print("…loading [blue]DPM fast[/blue] sampler…")
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config, algorithm_type="dpmsolver")
+        elif sampler == "LMS Karras":
+            print("…loading [blue]LMS Karras[/blue] sampler…")
+            self.pipeline.scheduler = LMSDiscreteScheduler.from_config(self.pipeline.scheduler.config, use_karras_sigmas=True)
         elif sampler == "Euler":
-            print("...loading [blue]Euler[/blue] sampler...")
+            print("…loading [blue]Euler[/blue] sampler…")
             self.pipeline.scheduler = EulerDiscreteScheduler.from_config(self.pipeline.scheduler.config)
         elif sampler == "Euler A":
-            print("...loading [blue]Euler Ancestral[/blue] sampler...")
+            print("…loading [blue]Euler Ancestral[/blue] sampler…")
             self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(self.pipeline.scheduler.config)
         elif sampler == "LMS":
-            print("...loading [blue]LMS[/blue] sampler...")
+            print("…loading [blue]LMS[/blue] sampler…")
             self.pipeline.scheduler = LMSDiscreteScheduler.from_config(self.pipeline.scheduler.config)
         elif sampler == "PNDM":
-            print("...loading [blue]PNDM[/blue] sampler...")
+            print("…loading [blue]PNDM[/blue] sampler…")
             self.pipeline.scheduler = PNDMScheduler.from_config(self.pipeline.scheduler.config)
         elif sampler == "UniPC":
-            print("...loading [blue]UniPC Multistep[/blue] sampler...")
+            print("…loading [blue]UniPC Multistep[/blue] sampler…")
             self.pipeline.scheduler = UniPCMultistepScheduler.from_config(self.pipeline.scheduler.config)
+        elif sampler == "Heun":
+            print("…loading [blue]Heun[/blue] sampler…")
+            self.pipeline.scheduler = HeunDiscreteScheduler.from_config(self.pipeline.scheduler.config)
         else:
-            print("...using [blue]basic[/blue] sampler...")
+            print("…using [blue]basic[/blue] sampler…")
             self.pipeline.scheduler = PNDMScheduler.from_config(self.pipeline.scheduler.config)
-        
-        ### Step 6: ControlNet
+
+                ### Step 6: ControlNet
         if self.controlNet != None:
             if isinstance(controlNetStrength, list):
                 controlNetStrength = controlNetStrength[0]
